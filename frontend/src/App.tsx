@@ -251,10 +251,14 @@ export default function App() {
         },
         controller.signal,
       );
-      if (answerRef.current.trim()) {
+      // Keep the follow-up context free of the appended references block.
+      const previousAnswer = answerRef.current
+        .replace(/\n---\n\n#### References[\s\S]*$/, "")
+        .trim();
+      if (previousAnswer) {
         const exchange: { role: "user" | "assistant"; content: string }[] = [
           { role: "user", content: text },
-          { role: "assistant", content: answerRef.current },
+          { role: "assistant", content: previousAnswer },
         ];
         conversationRef.current = [...conversationRef.current, ...exchange].slice(-8);
       }
