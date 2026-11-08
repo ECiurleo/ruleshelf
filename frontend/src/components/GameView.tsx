@@ -17,6 +17,7 @@ export function GameView({
   documents,
   campaigns,
   embeddingConfigured,
+  canWrite = true,
   onUpload,
   onEdit,
   onDelete,
@@ -35,6 +36,7 @@ export function GameView({
   documents: Document[];
   campaigns: Campaign[];
   embeddingConfigured: boolean;
+  canWrite?: boolean;
   onUpload: (role: string, campaignId?: string | null) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -105,6 +107,7 @@ export function GameView({
 
   const docProps = (doc: Document) => ({
     document: doc,
+    canWrite,
     onOpen: () => onOpenDoc(doc),
     onReindex: () => onReindexDoc(doc),
     onDelete: () => onDeleteDoc(doc),
@@ -159,20 +162,29 @@ export function GameView({
               <Icon name="list" size={16} />
             </button>
           </div>
-          <button className="button primary" onClick={() => onUpload("core")}>
-            <Icon name="upload" size={17} /> Add document
-          </button>
-          <button className="icon-button" onClick={onEdit} title="Edit game" aria-label="Edit game">
-            <Icon name="edit" size={17} />
-          </button>
-          <button
-            className="icon-button danger"
-            onClick={onDelete}
-            title="Delete game"
-            aria-label="Delete game"
-          >
-            <Icon name="trash" size={17} />
-          </button>
+          {canWrite && (
+            <>
+              <button className="button primary" onClick={() => onUpload("core")}>
+                <Icon name="upload" size={17} /> Add document
+              </button>
+              <button
+                className="icon-button"
+                onClick={onEdit}
+                title="Edit game"
+                aria-label="Edit game"
+              >
+                <Icon name="edit" size={17} />
+              </button>
+              <button
+                className="icon-button danger"
+                onClick={onDelete}
+                title="Delete game"
+                aria-label="Delete game"
+              >
+                <Icon name="trash" size={17} />
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -183,13 +195,18 @@ export function GameView({
           </span>
           <h2>No rulebooks yet</h2>
           <p>
-            Add the core {game.game_type === "rpg" ? "rulebook" : "rules"} first — that becomes
-            the primary source. Supplements and campaigns go alongside it.
+            {canWrite
+              ? `Add the core ${game.game_type === "rpg" ? "rulebook" : "rules"} first — that becomes the primary source. Supplements and campaigns go alongside it.`
+              : "This shelf is still empty. Ask an administrator to upload the books."}
           </p>
-          <button className="button primary" onClick={() => onUpload("core")}>
-            <Icon name="upload" size={17} /> Upload the core rules
-          </button>
-          <p className="fine-print">PDF, EPUB, DOCX, Markdown or plain text.</p>
+          {canWrite && (
+            <>
+              <button className="button primary" onClick={() => onUpload("core")}>
+                <Icon name="upload" size={17} /> Upload the core rules
+              </button>
+              <p className="fine-print">PDF, EPUB, DOCX, Markdown or plain text.</p>
+            </>
+          )}
         </div>
       ) : (
         <div className="role-sections">
@@ -205,9 +222,11 @@ export function GameView({
                         {plural(campaignCount, "campaign")} ·{" "}
                         {plural(campaignDocs.length, "book")}
                       </span>
-                      <button className="button ghost small" onClick={onCampaignCreate}>
-                        <Icon name="plus" size={15} /> New campaign
-                      </button>
+                      {canWrite && (
+                        <button className="button ghost small" onClick={onCampaignCreate}>
+                          <Icon name="plus" size={15} /> New campaign
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -221,6 +240,7 @@ export function GameView({
                           campaigns={campaigns}
                           view={view}
                           embeddingConfigured={embeddingConfigured}
+                          canWrite={canWrite}
                           collapsed={collapsed.has(group.campaign?.id ?? "ungrouped")}
                           onToggleCollapsed={() =>
                             toggleCollapsed(group.campaign?.id ?? "ungrouped")
@@ -248,9 +268,11 @@ export function GameView({
                         scenario as its own document. Existing campaign books can be assigned
                         from each book's campaign menu.
                       </p>
-                      <button className="button primary" onClick={onCampaignCreate}>
-                        <Icon name="plus" size={16} /> New campaign
-                      </button>
+                      {canWrite && (
+                        <button className="button primary" onClick={onCampaignCreate}>
+                          <Icon name="plus" size={16} /> New campaign
+                        </button>
+                      )}
                     </div>
                   )}
                 </section>
@@ -268,9 +290,11 @@ export function GameView({
                   </h2>
                   <div className="role-heading-right">
                     <span className="role-count">{plural(docs.length, "book")}</span>
-                    <button className="button ghost small" onClick={() => onUpload(role.id)}>
-                      <Icon name="plus" size={15} /> Add
-                    </button>
+                    {canWrite && (
+                      <button className="button ghost small" onClick={() => onUpload(role.id)}>
+                        <Icon name="plus" size={15} /> Add
+                      </button>
+                    )}
                   </div>
                 </div>
                 {docs.length ? (
@@ -287,12 +311,12 @@ export function GameView({
                       ),
                     )}
                   </div>
-                ) : (
+                ) : canWrite ? (
                   <button className="dropzone small" onClick={() => onUpload(role.id)}>
                     <Icon name="plus" size={18} />
                     Add a {role.label.toLowerCase()} document
                   </button>
-                )}
+                ) : null}
               </section>
             );
           })}

@@ -15,6 +15,7 @@ os.environ["RULESHELF_DATA_DIR"] = str(_TEST_DIR)
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.auth import create_user  # noqa: E402
 from app.config import FILES_DIR, THUMBNAILS_DIR  # noqa: E402
 from app.db import db, init_db  # noqa: E402
 from app.main import app  # noqa: E402
@@ -47,9 +48,47 @@ def clean_library():
     yield
 
 
+ADMIN_EMAIL = "admin@ruleshelf.test"
+ADMIN_PASSWORD = "testadmin123"
+VIEWER_EMAIL = "viewer@ruleshelf.test"
+VIEWER_PASSWORD = "testviewer123"
+
+
+def _ensure_user(email: str, password: str, role: str) -> None:
+    with db() as conn:
+        row = conn.execute("SELECT * FROM users WHERE email = ?", (email,)).fetchone()
+        if row:
+            return
+        create_user(conn, email, password, role)
+
+
+def _login(client: TestClient, email: str, password: str) -> None:
+    response = client.post(
+        "/api/auth/login", json={"email": email, "password": password}
+    )
+    assert response.status_code == 200, response.text
+
+
 @pytest.fixture()
 def client():
+    _ensure_user(ADMIN_EMAIL, ADMIN_PASSWORD, "admin")
     with TestClient(app) as test_client:
+        _login(test_client, ADMIN_EMAIL, ADMIN_PASSWORD)
+        yield test_client
+
+
+@pytest.fixture()
+def anon_client():
+    _ensure_user(ADMIN_EMAIL, ADMIN_PASSWORD, "admin")
+    with TestClient(app) as test_client:
+        yield test_client
+
+
+@pytest.fixture()
+def viewer_client():
+    _ensure_user(VIEWER_EMAIL, VIEWER_PASSWORD, "viewer")
+    with TestClient(app) as test_client:
+        _login(test_client, VIEWER_EMAIL, VIEWER_PASSWORD)
         yield test_client
 
 

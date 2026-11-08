@@ -3095,3 +3095,199 @@ code {
 [data-theme="light"] ::-webkit-scrollbar-thumb {
   border-color: var(--bg);
 }
+
+/* ------------------------------------------------------------------ */
+/* Authentication                                                      */
+/* ------------------------------------------------------------------ */
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background:
+    radial-gradient(1200px 600px at 15% -10%, var(--accent-soft), transparent 60%),
+    var(--bg);
+  position: relative;
+}
+
+.login-theme {
+  position: absolute;
+  top: 22px;
+  right: 24px;
+}
+
+.login-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  padding: 30px 28px 26px;
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 26px;
+}
+
+.login-brand strong {
+  display: block;
+  font-family: var(--serif);
+  font-size: 19px;
+  letter-spacing: 0.01em;
+}
+
+.login-brand small {
+  display: block;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.login-card h1 {
+  font-size: 24px;
+  margin: 0 0 6px;
+}
+
+.login-sub {
+  color: var(--text-dim);
+  font-size: 13.5px;
+  margin: 0 0 20px;
+}
+
+.login-submit {
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.login-foot {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.55;
+  margin: 18px 0 0;
+  text-align: center;
+}
+
+.form-error {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  margin: 0 0 12px;
+}
+
+/* Account menu */
+.user-menu {
+  position: relative;
+  margin-top: 8px;
+}
+
+.user-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+}
+
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 71;
+  width: 240px;
+  padding: 6px;
+  background: var(--modal-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-menu-id {
+  padding: 9px 10px 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  min-width: 0;
+}
+
+.user-menu-id strong {
+  display: block;
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-menu-id small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.user-menu .nav-item {
+  width: 100%;
+  text-align: left;
+}
+
+/* User administration */
+.user-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.user-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 180px;
+  color: var(--text-dim);
+}
+
+.user-identity strong {
+  display: block;
+  color: var(--text);
+  font-size: 12.5px;
+  word-break: break-all;
+}
+
+.user-identity small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.user-row select {
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .topbar-user,
+  .topbar-theme {
+    margin-top: 8px;
+  }
+
+  .user-menu {
+    margin-top: 8px;
+  }
+}

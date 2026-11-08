@@ -5,9 +5,10 @@ from __future__ import annotations
 import sqlite3
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.auth import require_admin
 from app.db import db, utcnow
 
 router = APIRouter(prefix="/api", tags=["campaigns"])
@@ -64,7 +65,7 @@ def list_campaigns(game_id: str):
         return {"campaigns": [_payload(row) for row in rows], "total": len(rows)}
 
 
-@router.post("/games/{game_id}/campaigns", status_code=201)
+@router.post("/games/{game_id}/campaigns", status_code=201, dependencies=[Depends(require_admin)])
 def create_campaign(game_id: str, payload: CampaignCreate):
     with db() as conn:
         _require_game(conn, game_id)
@@ -99,7 +100,7 @@ def create_campaign(game_id: str, payload: CampaignCreate):
         return _payload(row)
 
 
-@router.patch("/campaigns/{campaign_id}")
+@router.patch("/campaigns/{campaign_id}", dependencies=[Depends(require_admin)])
 def update_campaign(campaign_id: str, payload: CampaignUpdate):
     with db() as conn:
         row = conn.execute("SELECT * FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()
@@ -119,7 +120,7 @@ def update_campaign(campaign_id: str, payload: CampaignUpdate):
         return _payload(updated) if updated else {"id": campaign_id}
 
 
-@router.delete("/campaigns/{campaign_id}")
+@router.delete("/campaigns/{campaign_id}", dependencies=[Depends(require_admin)])
 def delete_campaign(campaign_id: str):
     with db() as conn:
         row = conn.execute("SELECT * FROM campaigns WHERE id = ?", (campaign_id,)).fetchone()

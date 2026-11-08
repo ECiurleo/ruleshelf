@@ -7,6 +7,7 @@ export function Sidebar({
   stats,
   version,
   open,
+  canWrite = true,
   onSelect,
   onNewGame,
   onSettings,
@@ -19,6 +20,7 @@ export function Sidebar({
   stats: Stats | null;
   version: string;
   open: boolean;
+  canWrite?: boolean;
   onSelect: (id: string | null) => void;
   onNewGame: () => void;
   onSettings: () => void;
@@ -55,14 +57,16 @@ export function Sidebar({
 
           <div className="nav-heading">
             <span>Games</span>
-            <button
-              className="icon-button small"
-              onClick={onNewGame}
-              title="Add a game"
-              aria-label="Add a game"
-            >
-              <Icon name="plus" size={15} />
-            </button>
+            {canWrite && (
+              <button
+                className="icon-button small"
+                onClick={onNewGame}
+                title="Add a game"
+                aria-label="Add a game"
+              >
+                <Icon name="plus" size={15} />
+              </button>
+            )}
           </div>
 
           <div className="game-list">
@@ -81,9 +85,11 @@ export function Sidebar({
             {games.length === 0 && (
               <p className="sidebar-empty">
                 No games yet.
-                <button className="link-button" onClick={onNewGame}>
-                  Add your first one
-                </button>
+                {canWrite && (
+                  <button className="link-button" onClick={onNewGame}>
+                    Add your first one
+                  </button>
+                )}
               </p>
             )}
           </div>
@@ -107,10 +113,12 @@ export function Sidebar({
             <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
             <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
           </button>
-          <button className="nav-item" onClick={onSettings}>
-            <Icon name="settings" size={17} />
-            <span>Settings</span>
-          </button>
+          {canWrite && (
+            <button className="nav-item" onClick={onSettings}>
+              <Icon name="settings" size={17} />
+              <span>Settings</span>
+            </button>
+          )}
           <div className="version">v{version}</div>
         </div>
       </aside>

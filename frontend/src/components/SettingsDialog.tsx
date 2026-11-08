@@ -9,8 +9,9 @@ import {
 import { Modal } from "./Modal";
 import { Icon } from "./Icon";
 import { ProviderCard } from "./ProviderCard";
+import { UsersTab } from "./UsersTab";
 
-type Tab = "providers" | "search" | "types";
+type Tab = "providers" | "search" | "types" | "users";
 
 function slugify(value: string): string {
   return value
@@ -22,12 +23,14 @@ function slugify(value: string): string {
 export function SettingsDialog({
   bundle,
   providers,
+  currentUserId,
   onClose,
   onRefresh,
   notify,
 }: {
   bundle: AppSettings;
   providers: ProviderList;
+  currentUserId: string;
   onClose: () => void;
   onRefresh: () => Promise<void>;
   notify: (message: string, kind?: "ok" | "error") => void;
@@ -51,6 +54,9 @@ export function SettingsDialog({
         <button className={tab === "types" ? "selected" : ""} onClick={() => setTab("types")}>
           Game types
         </button>
+        <button className={tab === "users" ? "selected" : ""} onClick={() => setTab("users")}>
+          Users
+        </button>
       </div>
 
       {tab === "providers" && (
@@ -62,6 +68,7 @@ export function SettingsDialog({
       {tab === "types" && (
         <TypesTab bundle={bundle} onRefresh={onRefresh} notify={notify} />
       )}
+      {tab === "users" && <UsersTab currentUserId={currentUserId} notify={notify} />}
     </Modal>
   );
 }

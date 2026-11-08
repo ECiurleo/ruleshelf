@@ -10,6 +10,78 @@ from app.services.search import SearchFilters, search_semantic
 from tests.conftest import upload_document, wait_until_ready
 
 
+def test_api_requires_login(anon_client):
+    assert anon_client.get("/api/games").status_code == 401
+    assert anon_client.get("/api/health").status_code == 200
+
+
+def test_login_logout(anon_client):
+    response = anon_client.post(
+        "/api/auth/login",
+        json={"email": "admin@ruleshelf.test", "password": "testadmin123"},
+    )
+    assert response.status_code == 200
+    assert response.json()["user"]["role"] == "admin"
+    assert anon_client.get("/api/auth/me").status_code == 200
+    assert anon_client.post("/api/auth/logout").status_code == 200
+    assert anon_client.get("/api/auth/me").status_code == 401
+
+
+def test_viewer_can_read_but_not_write(client, viewer_client, game):
+    assert viewer_client.get("/api/games").status_code == 200
+    assert viewer_client.get("/api/providers").status_code == 403
+    assert (
+        viewer_client.post(
+            "/api/games",
+            json={"title": "Blocked", "game_type": "rpg", "description": ""},
+        ).status_code
+        == 403
+    )
+    assert viewer_client.get("/api/search", params={"q": "combat"}).status_code == 200
+    assert viewer_client.put("/api/settings", json={"rag_top_k": 3}).status_code == 403
+    assert client.get("/api/games").status_code == 200
+
+
+def test_user_management_and_protection(client):
+    created = client.post(
+        "/api/users",
+        json={
+            "email": "newviewer@ruleshelf.test",
+            "password": "newviewer123",
+            "role": "viewer",
+        },
+    )
+    assert created.status_code == 201, created.text
+    user_id = created.json()["id"]
+
+    listed = client.get("/api/users").json()["users"]
+    assert any(user["email"] == "newviewer@ruleshelf.test" for user in listed)
+
+    promoted = client.patch(f"/api/users/{user_id}", json={"role": "admin"}).json()
+    assert promoted["role"] == "admin"
+    demoted = client.patch(f"/api/users/{user_id}", json={"role": "viewer"}).json()
+    assert demoted["role"] == "viewer"
+
+    assert client.delete(f"/api/users/{user_id}").json()["deleted"] is True
+
+    me = client.get("/api/auth/me").json()["user"]
+    assert client.delete(f"/api/users/{me['id']}").status_code == 400
+    assert client.patch(f"/api/users/{me['id']}", json={"role": "viewer"}).status_code == 400
+
+
+def test_change_own_password(client):
+    response = client.post(
+        "/api/auth/password",
+        json={"current_password": "testadmin123", "new_password": "newadmin123"},
+    )
+    assert response.status_code == 200, response.text
+    # Restore the fixture password for the rest of the suite.
+    client.post(
+        "/api/auth/password",
+        json={"current_password": "newadmin123", "new_password": "testadmin123"},
+    )
+
+
 def test_create_and_list_game(client, game):
     listing = client.get("/api/games").json()
     assert listing["total"] == 1
@@ -459,4 +531,6 @@ def test_sqlite_schema_has_fts(client):
         "chunks_fts",
         "embeddings",
         "providers",
+        "users",
+        "sessions",
     } <= tables

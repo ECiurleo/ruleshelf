@@ -14,6 +14,7 @@ const STATUS_LABEL: Record<Document["status"], string> = {
 export function DocumentCoverCard({
   document: doc,
   campaigns,
+  canWrite = true,
   onCampaignChange,
   onOrderChange,
   onOpen,
@@ -23,6 +24,7 @@ export function DocumentCoverCard({
 }: {
   document: Document;
   campaigns?: Campaign[];
+  canWrite?: boolean;
   onCampaignChange?: (campaignId: string | null) => void;
   onOrderChange?: (order: number) => void;
   onOpen: () => void;
@@ -81,34 +83,38 @@ export function DocumentCoverCard({
             >
               <Icon name="external" size={15} />
             </a>
-            <button className="icon-button" onClick={rename} title="Rename" aria-label="Rename">
-              <Icon name="edit" size={15} />
-            </button>
-            <button
-              className="icon-button"
-              onClick={onReindex}
-              disabled={busy}
-              title="Re-index"
-              aria-label="Re-index"
-            >
-              <Icon name="refresh" size={15} />
-            </button>
-            <button
-              className="icon-button danger"
-              onClick={onDelete}
-              title="Delete"
-              aria-label="Delete"
-            >
-              <Icon name="trash" size={15} />
-            </button>
+            {canWrite && (
+              <>
+                <button className="icon-button" onClick={rename} title="Rename" aria-label="Rename">
+                  <Icon name="edit" size={15} />
+                </button>
+                <button
+                  className="icon-button"
+                  onClick={onReindex}
+                  disabled={busy}
+                  title="Re-index"
+                  aria-label="Re-index"
+                >
+                  <Icon name="refresh" size={15} />
+                </button>
+                <button
+                  className="icon-button danger"
+                  onClick={onDelete}
+                  title="Delete"
+                  aria-label="Delete"
+                >
+                  <Icon name="trash" size={15} />
+                </button>
+              </>
+            )}
           </div>
         </div>
 
         <div className="cover-info">
-          {doc.role === "campaign" && onOrderChange && (
+          {canWrite && doc.role === "campaign" && onOrderChange && (
             <ScenarioOrderInput order={doc.sort_order} onSave={onOrderChange} />
           )}
-          {doc.role === "campaign" && campaigns && campaigns.length > 0 && onCampaignChange && (
+          {canWrite && doc.role === "campaign" && campaigns && campaigns.length > 0 && onCampaignChange && (
             <select
               className="cover-campaign"
               value={doc.campaign_id ?? ""}

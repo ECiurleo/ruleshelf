@@ -7,9 +7,10 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.auth import require_admin
 from app.config import FILES_DIR
 from app.db import db
 from app.services.ingest import unindex_document
@@ -82,7 +83,7 @@ def list_games():
     return {"games": games, "total": len(games)}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_admin)])
 def create_game(payload: GameCreate):
     with db() as conn:
         types = _game_types(conn)
@@ -108,7 +109,7 @@ def get_game(game_id: str):
         return {**game_payload(conn, row, types), "type": types.get(row["game_type"])}
 
 
-@router.patch("/{game_id}")
+@router.patch("/{game_id}", dependencies=[Depends(require_admin)])
 def update_game(game_id: str, payload: GameUpdate):
     with db() as conn:
         row = conn.execute("SELECT * FROM games WHERE id = ?", (game_id,)).fetchone()
@@ -129,7 +130,7 @@ def update_game(game_id: str, payload: GameUpdate):
         return game_payload(conn, row)
 
 
-@router.delete("/{game_id}")
+@router.delete("/{game_id}", dependencies=[Depends(require_admin)])
 def delete_game(game_id: str):
     with db() as conn:
         row = conn.execute("SELECT * FROM games WHERE id = ?", (game_id,)).fetchone()

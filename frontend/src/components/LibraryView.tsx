@@ -6,6 +6,7 @@ export function LibraryView({
   gameTypes,
   stats,
   embeddingReady,
+  canWrite = true,
   onOpenGame,
   onNewGame,
   onOpenSettings,
@@ -14,6 +15,7 @@ export function LibraryView({
   gameTypes: GameType[];
   stats: Stats | null;
   embeddingReady: boolean;
+  canWrite?: boolean;
   onOpenGame: (id: string) => void;
   onNewGame: () => void;
   onOpenSettings: () => void;
@@ -33,9 +35,11 @@ export function LibraryView({
             meaning, and ask questions with answers cited back to the page.
           </p>
           <div className="hero-actions">
-            <button className="button primary" onClick={onNewGame}>
-              <Icon name="plus" size={17} /> Add a game
-            </button>
+            {canWrite && (
+              <button className="button primary" onClick={onNewGame}>
+                <Icon name="plus" size={17} /> Add a game
+              </button>
+            )}
             {stats && (
               <span className="hero-stats">
                 {plural(stats.games, "game")} · {plural(stats.documents, "book")} ·{" "}
@@ -64,17 +68,21 @@ export function LibraryView({
             <strong>Semantic search is off.</strong> Keyword search works now. Add an embedding
             model — local Ollama is free — to search by meaning and get better AI answers.
           </div>
-          <button className="button ghost small" onClick={onOpenSettings}>
-            Configure
-          </button>
+          {canWrite && (
+            <button className="button ghost small" onClick={onOpenSettings}>
+              Configure
+            </button>
+          )}
         </div>
       )}
 
       <div className="section-heading">
         <h2>Your shelf</h2>
-        <button className="button ghost small" onClick={onNewGame}>
-          <Icon name="plus" size={15} /> New game
-        </button>
+        {canWrite && (
+          <button className="button ghost small" onClick={onNewGame}>
+            <Icon name="plus" size={15} /> New game
+          </button>
+        )}
       </div>
 
       {games.length === 0 ? (
@@ -87,9 +95,11 @@ export function LibraryView({
             Add a roleplaying game, board game or wargame, then upload its core rulebook. You can
             file supplements under expansions and adventures under campaigns.
           </p>
-          <button className="button primary" onClick={onNewGame}>
-            <Icon name="plus" size={17} /> Add your first game
-          </button>
+          {canWrite && (
+            <button className="button primary" onClick={onNewGame}>
+              <Icon name="plus" size={17} /> Add your first game
+            </button>
+          )}
         </div>
       ) : (
         <div className="game-grid">
@@ -120,10 +130,12 @@ export function LibraryView({
               </button>
             );
           })}
-          <button className="game-card add-card" onClick={onNewGame}>
-            <Icon name="plus" size={26} />
-            <span>Add another game</span>
-          </button>
+          {canWrite && (
+            <button className="game-card add-card" onClick={onNewGame}>
+              <Icon name="plus" size={26} />
+              <span>Add another game</span>
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -15,6 +15,7 @@ export function DocumentCard({
   document: doc,
   embeddingConfigured,
   campaigns,
+  canWrite = true,
   onCampaignChange,
   onOrderChange,
   onOpen,
@@ -25,6 +26,7 @@ export function DocumentCard({
   document: Document;
   embeddingConfigured: boolean;
   campaigns?: Campaign[];
+  canWrite?: boolean;
   onCampaignChange?: (campaignId: string | null) => void;
   onOrderChange?: (order: number) => void;
   onOpen: () => void;
@@ -78,10 +80,10 @@ export function DocumentCard({
                 : `${doc.embedded_chunks}/${doc.chunk_count} embedded`}
             </span>
           )}
-          {doc.role === "campaign" && onOrderChange && (
+          {canWrite && doc.role === "campaign" && onOrderChange && (
             <ScenarioOrderInput order={doc.sort_order} onSave={onOrderChange} />
           )}
-          {doc.role === "campaign" && campaigns && campaigns.length > 0 && onCampaignChange && (
+          {canWrite && doc.role === "campaign" && campaigns && campaigns.length > 0 && onCampaignChange && (
             <select
               className="campaign-select"
               value={doc.campaign_id ?? ""}
@@ -114,26 +116,30 @@ export function DocumentCard({
         >
           <Icon name="external" size={17} />
         </a>
-        <button className="icon-button" onClick={rename} title="Rename" aria-label="Rename">
-          <Icon name="edit" size={17} />
-        </button>
-        <button
-          className="icon-button"
-          onClick={onReindex}
-          title="Re-index"
-          aria-label="Re-index"
-          disabled={busy}
-        >
-          <Icon name="refresh" size={17} />
-        </button>
-        <button
-          className="icon-button danger"
-          onClick={onDelete}
-          title="Delete"
-          aria-label="Delete"
-        >
-          <Icon name="trash" size={17} />
-        </button>
+        {canWrite && (
+          <>
+            <button className="icon-button" onClick={rename} title="Rename" aria-label="Rename">
+              <Icon name="edit" size={17} />
+            </button>
+            <button
+              className="icon-button"
+              onClick={onReindex}
+              title="Re-index"
+              aria-label="Re-index"
+              disabled={busy}
+            >
+              <Icon name="refresh" size={17} />
+            </button>
+            <button
+              className="icon-button danger"
+              onClick={onDelete}
+              title="Delete"
+              aria-label="Delete"
+            >
+              <Icon name="trash" size={17} />
+            </button>
+          </>
+        )}
       </div>
     </article>
   );

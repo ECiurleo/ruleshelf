@@ -67,7 +67,7 @@ export function ResultsView({
   error: string;
   onOpenResult: (result: SearchResult) => void;
   onStop: () => void;
-  onConfigure: () => void;
+  onConfigure?: () => void;
 }) {
   const showAnswer = answerMode && (asking || answer || error);
 
@@ -175,9 +175,11 @@ export function ResultsView({
         <div className="banner subtle">
           <Icon name="alert" size={17} />
           <div>{meta.note}</div>
-          <button className="button ghost small" onClick={onConfigure}>
-            Settings
-          </button>
+          {onConfigure && (
+            <button className="button ghost small" onClick={onConfigure}>
+              Settings
+            </button>
+          )}
         </div>
       )}
 
@@ -192,9 +194,11 @@ export function ResultsView({
         <div className="banner error">
           <Icon name="alert" size={17} />
           <div>{error}</div>
-          <button className="button ghost small" onClick={onConfigure}>
-            Check providers
-          </button>
+          {onConfigure && (
+            <button className="button ghost small" onClick={onConfigure}>
+              Check providers
+            </button>
+          )}
         </div>
       )}
 

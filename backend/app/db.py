@@ -19,7 +19,7 @@ from app.defaults import BUILTIN_PROVIDERS, DEFAULT_SYSTEM_PROMPT, GAME_TYPES
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS games (
@@ -118,6 +118,23 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id            TEXT PRIMARY KEY,
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'viewer',
+    active        INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
 CREATE TABLE IF NOT EXISTS jobs (
     id         TEXT PRIMARY KEY,
     kind       TEXT NOT NULL,
@@ -202,6 +219,35 @@ def init_db() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_documents_campaign ON documents(campaign_id)"
             )
             version = 3
+
+        if version < 4:
+            log.info("Migrating database to schema v4 (users and sessions)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS users (
+                    id            TEXT PRIMARY KEY,
+                    email         TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    role          TEXT NOT NULL DEFAULT 'viewer',
+                    active        INTEGER NOT NULL DEFAULT 1,
+                    created_at    TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    user_id    TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)"
+            )
+            version = 4
 
         conn.execute(f"PRAGMA user_version = {version}")
         _seed(conn)

@@ -10,6 +10,7 @@ export function CampaignGroup({
   campaigns,
   view,
   embeddingConfigured,
+  canWrite = true,
   collapsed,
   onToggleCollapsed,
   onUpload,
@@ -27,6 +28,7 @@ export function CampaignGroup({
   campaigns: Campaign[];
   view: "grid" | "list";
   embeddingConfigured: boolean;
+  canWrite?: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onUpload: (campaignId: string | null) => void;
@@ -52,6 +54,7 @@ export function CampaignGroup({
                 key={doc.id}
                 document={doc}
                 campaigns={campaigns}
+                canWrite={canWrite}
                 onCampaignChange={(campaignId) => onAssignCampaign(doc, campaignId)}
                 onOrderChange={(order) => onScenarioOrder(doc, order)}
                 onOpen={() => onOpenDoc(doc)}
@@ -64,6 +67,7 @@ export function CampaignGroup({
                 key={doc.id}
                 document={doc}
                 embeddingConfigured={embeddingConfigured}
+                canWrite={canWrite}
                 campaigns={campaigns}
                 onCampaignChange={(campaignId) => onAssignCampaign(doc, campaignId)}
                 onOrderChange={(order) => onScenarioOrder(doc, order)}
@@ -75,7 +79,7 @@ export function CampaignGroup({
             ),
           )}
         </div>
-      ) : campaign ? (
+      ) : campaign && canWrite ? (
         <button className="dropzone small" onClick={() => onUpload(campaign.id)}>
           <Icon name="plus" size={18} />
           Add a scenario to {campaign.title}
@@ -126,10 +130,12 @@ export function CampaignGroup({
             <Icon name="chevron" size={14} className={collapsed ? "" : "open"} />
             {collapsed ? "Show" : "Hide"} scenarios
           </button>
-          <button className="button ghost small" onClick={() => onUpload(campaign.id)}>
-            <Icon name="plus" size={15} /> Add scenario
-          </button>
-          {onEdit && onDelete && (
+          {canWrite && (
+            <button className="button ghost small" onClick={() => onUpload(campaign.id)}>
+              <Icon name="plus" size={15} /> Add scenario
+            </button>
+          )}
+          {canWrite && onEdit && onDelete && (
             <>
               <button
                 className="icon-button small"

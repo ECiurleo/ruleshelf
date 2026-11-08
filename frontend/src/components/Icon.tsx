@@ -22,7 +22,10 @@ export type IconName =
   | "grid"
   | "list"
   | "sun"
-  | "moon";
+  | "moon"
+  | "lock"
+  | "logout"
+  | "user";
 
 const paths: Record<IconName, React.ReactNode> = {
   search: (
@@ -124,6 +127,24 @@ const paths: Record<IconName, React.ReactNode> = {
     </>
   ),
   moon: <path d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.5 6.5 0 0 0 21 12.8z" />,
+  lock: (
+    <>
+      <rect x="4" y="10" width="16" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <path d="m16 17 5-5-5-5M21 12H9" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </>
+  ),
 };
 
 export function Icon({

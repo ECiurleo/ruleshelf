@@ -10,6 +10,7 @@ import {
   type ProviderList,
   type SearchResult,
   type Stats,
+  type User,
 } from "./lib/api";
 import { Sidebar } from "./components/Sidebar";
 import { SearchBar, type SearchMode } from "./components/SearchBar";
@@ -21,6 +22,8 @@ import { AddGameDialog } from "./components/AddGameDialog";
 import { UploadDialog } from "./components/UploadDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { CampaignDialog } from "./components/CampaignDialog";
+import { LoginPage } from "./components/LoginPage";
+import { ChangePasswordDialog } from "./components/ChangePasswordDialog";
 import { Icon } from "./components/Icon";
 
 interface Toast {
@@ -40,6 +43,11 @@ interface SearchMeta {
 }
 
 export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+
   const [games, setGames] = useState<Game[]>([]);
   const [gameTypes, setGameTypes] = useState<GameType[]>([]);
   const [bundle, setBundle] = useState<AppSettings | null>(null);
@@ -104,19 +112,23 @@ export default function App() {
   }, []);
 
   const refreshLibrary = useCallback(async () => {
-    const [gameList, typeList, settings, providerList, statsResult] = await Promise.all([
+    const [gameList, typeList, settings, statsResult] = await Promise.all([
       api.games(),
       api.gameTypes(),
       api.settings(),
-      api.providers(),
       api.stats(),
     ]);
     setGames(gameList.games);
     setGameTypes(typeList.game_types);
     setBundle(settings);
-    setProviders(providerList);
     setStats(statsResult);
-  }, []);
+    // Provider settings are administrator-only; viewers get library data.
+    if (user?.role === "admin") {
+      setProviders(await api.providers());
+    } else {
+      setProviders(null);
+    }
+  }, [user?.role]);
 
   const refreshDocuments = useCallback(async (gameId: string | null) => {
     if (!gameId) {
@@ -151,12 +163,45 @@ export default function App() {
     localStorage.setItem("ruleshelf:includeBgg", value ? "1" : "0");
   };
 
-  // Initial load
+  // Restore the session before deciding which screen to show.
   useEffect(() => {
+    let cancelled = false;
+    api
+      .me()
+      .then((result) => {
+        if (!cancelled) setUser(result.user);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setAuthReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Any 401 from the API means the session expired or was revoked.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setUser(null);
+      setUserMenuOpen(false);
+      setPasswordOpen(false);
+      setSettingsOpen(false);
+    };
+    window.addEventListener("ruleshelf:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("ruleshelf:unauthorized", onUnauthorized);
+  }, []);
+
+  // Initial load for the signed-in user.
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
     refreshLibrary()
       .catch((err: Error) => setLoadError(err.message))
       .finally(() => setLoading(false));
-  }, [refreshLibrary]);
+  }, [user, refreshLibrary]);
 
   // Answers are the default when a chat provider is configured; the toggle
   // still allows results-only searches.
@@ -482,6 +527,27 @@ export default function App() {
 
   const searchBusy = searching;
 
+  const signOut = async () => {
+    setUserMenuOpen(false);
+    try {
+      await api.logout();
+    } catch {
+      /* the session is cleared locally either way */
+    }
+    setUser(null);
+    setGames([]);
+    setDocuments([]);
+    setCampaigns([]);
+    setStats(null);
+    setBundle(null);
+    setResults([]);
+    setAnswer("");
+    setHasSearched(false);
+    setActiveGameId(null);
+    setSidebarOpen(false);
+    window.location.hash = "#/";
+  };
+
   const mainContent = () => {
     if (loading) {
       return (
@@ -517,7 +583,7 @@ export default function App() {
           error={searchError}
           onOpenResult={openReaderForResult}
           onStop={stopAsking}
-          onConfigure={() => setSettingsOpen(true)}
+          onConfigure={isAdmin ? () => setSettingsOpen(true) : undefined}
         />
       );
     }
@@ -529,6 +595,7 @@ export default function App() {
           documents={documents}
           campaigns={campaigns}
           embeddingConfigured={bundle?.info.embedding_ready ?? false}
+          canWrite={isAdmin}
           onUpload={(role, campaignId) => {
             setUploadRole(role);
             setUploadCampaignId(campaignId ?? null);
@@ -560,12 +627,36 @@ export default function App() {
         gameTypes={gameTypes}
         stats={stats}
         embeddingReady={bundle?.info.embedding_ready ?? false}
+        canWrite={isAdmin}
         onOpenGame={(id) => navigate(id)}
         onNewGame={() => setAddGameOpen(true)}
         onOpenSettings={() => setSettingsOpen(true)}
       />
     );
   };
+
+  if (!authReady) {
+    return (
+      <div className="login-page">
+        <span className="spinner large" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <LoginPage
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onLogin={(next) => {
+          setLoadError("");
+          setUser(next);
+        }}
+      />
+    );
+  }
+
+  const isAdmin = user.role === "admin";
 
   return (
     <div className="app-shell">
@@ -575,6 +666,7 @@ export default function App() {
         stats={stats}
         version={bundle?.info.version ?? "0.1.0"}
         open={sidebarOpen}
+        canWrite={isAdmin}
         onSelect={navigate}
         onNewGame={() => {
           setSidebarOpen(false);
@@ -643,14 +735,52 @@ export default function App() {
           >
             <Icon name={theme === "dark" ? "sun" : "moon"} size={19} />
           </button>
-          <button
-            className="icon-button topbar-settings"
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
-            title="Settings"
-          >
-            <Icon name="settings" size={19} />
-          </button>
+          {isAdmin && (
+            <button
+              className="icon-button topbar-settings"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Icon name="settings" size={19} />
+            </button>
+          )}
+          <div className="user-menu">
+            <button
+              className="icon-button topbar-user"
+              onClick={() => setUserMenuOpen((open) => !open)}
+              aria-label="Account menu"
+              aria-expanded={userMenuOpen}
+              title={user.email}
+            >
+              <Icon name="user" size={19} />
+            </button>
+            {userMenuOpen && (
+              <>
+                <div className="user-menu-scrim" onClick={() => setUserMenuOpen(false)} />
+                <div className="user-menu-panel">
+                  <div className="user-menu-id">
+                    <strong>{user.email}</strong>
+                    <small>{isAdmin ? "Administrator" : "Viewer"}</small>
+                  </div>
+                  <button
+                    className="nav-item"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      setPasswordOpen(true);
+                    }}
+                  >
+                    <Icon name="lock" size={16} />
+                    <span>Change password</span>
+                  </button>
+                  <button className="nav-item" onClick={signOut}>
+                    <Icon name="logout" size={16} />
+                    <span>Sign out</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
         <main className="main">{mainContent()}</main>
@@ -658,7 +788,7 @@ export default function App() {
 
       <ReaderDrawer target={reader} onClose={() => setReader(null)} />
 
-      {addGameOpen && (
+      {addGameOpen && isAdmin && (
         <AddGameDialog
           gameTypes={gameTypes}
           onClose={() => setAddGameOpen(false)}
@@ -670,7 +800,7 @@ export default function App() {
         />
       )}
 
-      {editingGame && (
+      {editingGame && isAdmin && (
         <AddGameDialog
           game={editingGame}
           gameTypes={gameTypes}
@@ -682,7 +812,7 @@ export default function App() {
         />
       )}
 
-      {uploadRole && activeGame && (
+      {uploadRole && activeGame && isAdmin && (
         <UploadDialog
           game={activeGame}
           gameType={activeGameType}
@@ -706,7 +836,7 @@ export default function App() {
         />
       )}
 
-      {campaignDialog && activeGame && (
+      {campaignDialog && activeGame && isAdmin && (
         <CampaignDialog
           gameId={activeGame.id}
           campaign={campaignDialog.campaign}
@@ -721,14 +851,19 @@ export default function App() {
         />
       )}
 
-      {settingsOpen && bundle && providers && (
+      {settingsOpen && isAdmin && bundle && providers && (
         <SettingsDialog
           bundle={bundle}
           providers={providers}
+          currentUserId={user.id}
           onClose={() => setSettingsOpen(false)}
           onRefresh={refreshLibrary}
           notify={notify}
         />
+      )}
+
+      {passwordOpen && (
+        <ChangePasswordDialog onClose={() => setPasswordOpen(false)} notify={notify} />
       )}
 
       {toast && (

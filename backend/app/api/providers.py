@@ -5,15 +5,20 @@ from __future__ import annotations
 import sqlite3
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from app.auth import require_admin
 from app.db import db, set_setting, utcnow
 from app.providers import ProviderConfig, build_provider, driver_specs, get_driver
 from app.providers.base import ProviderError
 from app.services.config_store import snapshot_config
 
-router = APIRouter(prefix="/api/providers", tags=["providers"])
+router = APIRouter(
+    prefix="/api/providers",
+    tags=["providers"],
+    dependencies=[Depends(require_admin)],
+)
 
 
 def _payload(row: sqlite3.Row) -> dict:

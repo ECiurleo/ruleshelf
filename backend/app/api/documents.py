@@ -7,10 +7,11 @@ import uuid
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from app.auth import require_admin
 from app.config import FILES_DIR, MAX_UPLOAD_BYTES
 from app.db import db, get_setting, utcnow
 from app.extractors import resolve_extension
@@ -108,7 +109,7 @@ def list_documents(game_id: str | None = None, role: str | None = None):
     return {"documents": docs, "total": len(docs)}
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=201, dependencies=[Depends(require_admin)])
 async def upload_document(
     game_id: str = Form(...),
     role: str = Form("core"),
@@ -227,7 +228,7 @@ def get_document(document_id: str):
         return _doc_payload(conn, row, get_setting(conn, "embedding_model"))
 
 
-@router.patch("/{document_id}")
+@router.patch("/{document_id}", dependencies=[Depends(require_admin)])
 def update_document(document_id: str, payload: DocumentUpdate):
     with db() as conn:
         row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
@@ -285,7 +286,7 @@ def update_document(document_id: str, payload: DocumentUpdate):
         return _doc_payload(conn, row, get_setting(conn, "embedding_model"))
 
 
-@router.delete("/{document_id}")
+@router.delete("/{document_id}", dependencies=[Depends(require_admin)])
 def delete_document(document_id: str):
     with db() as conn:
         row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
@@ -299,7 +300,7 @@ def delete_document(document_id: str):
     return {"deleted": True}
 
 
-@router.post("/{document_id}/reindex")
+@router.post("/{document_id}/reindex", dependencies=[Depends(require_admin)])
 def reindex_document(document_id: str):
     with db() as conn:
         row = conn.execute("SELECT id FROM documents WHERE id = ?", (document_id,)).fetchone()

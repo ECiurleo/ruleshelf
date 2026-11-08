@@ -5,9 +5,10 @@ from __future__ import annotations
 import json
 import sqlite3
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from app.auth import require_admin
 from app.config import (
     APP_NAME,
     APP_VERSION,
@@ -135,7 +136,7 @@ def get_settings():
         return _settings_payload(conn)
 
 
-@router.put("/settings")
+@router.put("/settings", dependencies=[Depends(require_admin)])
 def update_settings(payload: SettingsUpdate):
     values = payload.model_dump(exclude_unset=True, exclude_none=True)
     with db() as conn:
@@ -217,7 +218,7 @@ def list_game_types():
         }
 
 
-@router.post("/game-types", status_code=201)
+@router.post("/game-types", status_code=201, dependencies=[Depends(require_admin)])
 def create_game_type(payload: GameTypeCreate):
     with db() as conn:
         exists = conn.execute("SELECT 1 FROM game_types WHERE id = ?", (payload.id,)).fetchone()
@@ -237,7 +238,7 @@ def create_game_type(payload: GameTypeCreate):
     return {**payload.model_dump(), "builtin": False, "game_count": 0}
 
 
-@router.delete("/game-types/{type_id}")
+@router.delete("/game-types/{type_id}", dependencies=[Depends(require_admin)])
 def delete_game_type(type_id: str):
     with db() as conn:
         row = conn.execute("SELECT * FROM game_types WHERE id = ?", (type_id,)).fetchone()
@@ -263,7 +264,7 @@ class EmbedRequest(BaseModel):
     force: bool = False
 
 
-@router.post("/embeddings/build", status_code=202)
+@router.post("/embeddings/build", status_code=202, dependencies=[Depends(require_admin)])
 def build_embeddings(payload: EmbedRequest):
     with db() as conn:
         try:
@@ -280,7 +281,7 @@ def build_embeddings(payload: EmbedRequest):
     return {"job_id": job_id, "status": "queued"}
 
 
-@router.get("/jobs/{job_id}")
+@router.get("/jobs/{job_id}", dependencies=[Depends(require_admin)])
 def get_job(job_id: str):
     with db() as conn:
         row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()

@@ -180,6 +180,39 @@ to `/boot/config/plugins/dockerMan/templates-user/`. There is also
 [`deploy/unraid/docker-compose.yml`](deploy/unraid/docker-compose.yml) for the Compose Manager
 plugin. Check the port is free first — Unraid commonly uses 8080 (Immich), 3001, 8085 and 9696.
 
+## Signing in and users
+
+Ruleshelf requires a login. Every API route except health and the login endpoints is protected,
+and write operations are restricted to administrators.
+
+| Role | Can do |
+| --- | --- |
+| **Admin** | Read, search, upload/delete documents, manage games and campaigns, add/remove users, change AI settings. |
+| **Viewer** | Read documents, search, and ask questions. No changes. |
+
+The first administrator is created on the server; passwords are hashed with PBKDF2-SHA256 and
+sessions are stored as hashes in the database.
+
+```bash
+# inside the container (Unraid: docker exec -it Ruleshelf ...)
+python -m app.manage create-user you@example.com --role admin
+
+# other useful commands
+python -m app.manage list-users
+python -m app.manage reset-password you@example.com
+python -m app.manage delete-user someone@example.com
+```
+
+Passwords are prompted for, or supplied with `RULESHELF_PASSWORD` for scripted setup; they are
+never written to logs. After signing in, admins can add further users under
+**Settings → Users**, change roles, deactivate accounts or reset passwords. Viewers can change
+their own password from the account menu.
+
+Sessions last 30 days and are stored in an `HttpOnly`, `SameSite=Lax` cookie (marked `Secure`
+when the request arrives over HTTPS, for example behind a Cloudflare Tunnel). Changing a password
+or deactivating an account revokes that user's other sessions. Log in attempts are throttled after
+repeated failures.
+
 ## Setting up AI
 
 Keyword search works with no configuration at all. Meaning search and *Ask AI* need a provider.

@@ -6,14 +6,15 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import campaigns, documents, games, meta, providers, search
+from app.api import auth, campaigns, documents, games, meta, providers, search, users
+from app.auth import COOKIE_NAME, public_user, user_from_token
 from app.config import APP_NAME, APP_VERSION, DATA_DIR
-from app.db import init_db
+from app.db import db, init_db
 from app.extractors import ExtractionError
 from app.providers.base import ProviderError
 from app.services.config_store import CONFIG_PATH, apply_config_file, snapshot_config
@@ -58,6 +59,32 @@ app.add_middleware(
 )
 
 
+PUBLIC_API = {
+    "/api",
+    "/api/health",
+    "/api/auth/login",
+    "/api/auth/logout",
+    "/api/auth/me",
+}
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path.rstrip("/") or "/"
+    if (
+        request.method == "OPTIONS"
+        or not path.startswith("/api/")
+        or path in PUBLIC_API
+    ):
+        return await call_next(request)
+    with db() as conn:
+        row = user_from_token(conn, request.cookies.get(COOKIE_NAME))
+        if not row:
+            return JSONResponse(status_code=401, content={"detail": "Sign in to continue."})
+        request.state.user = public_user(row)
+    return await call_next(request)
+
+
 @app.exception_handler(ProviderError)
 async def provider_error_handler(_request, exc: ProviderError):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
@@ -69,6 +96,8 @@ async def extraction_error_handler(_request, exc: ExtractionError):
 
 
 for router in (
+    auth.router,
+    users.router,
     games.router,
     campaigns.router,
     documents.router,

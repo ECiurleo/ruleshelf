@@ -1,3 +1,13 @@
+export type UserRole = "admin" | "viewer";
+
+export interface User {
+  id: string;
+  email: string;
+  role: UserRole;
+  active: boolean;
+  created_at: string;
+}
+
 export type GameTypeId = string;
 
 export interface Role {
@@ -198,6 +208,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     headers.set("Content-Type", "application/json");
   }
   const response = await fetch(path, { ...init, headers });
+  if (response.status === 401 && !path.startsWith("/api/auth/login")) {
+    window.dispatchEvent(new Event("ruleshelf:unauthorized"));
+  }
   if (!response.ok) {
     let message = response.statusText || `Request failed (${response.status})`;
     try {
@@ -221,6 +234,23 @@ const patch = <T>(path: string, body: unknown) =>
   request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
 
 export const api = {
+  me: () => request<{ user: User }>("/api/auth/me"),
+  login: (email: string, password: string) =>
+    post<{ user: User }>("/api/auth/login", { email, password }),
+  logout: () => post<{ ok: boolean }>("/api/auth/logout", {}),
+  changePassword: (current_password: string, new_password: string) =>
+    post<{ ok: boolean }>("/api/auth/password", { current_password, new_password }),
+
+  listUsers: () => request<{ users: User[] }>("/api/users"),
+  createUser: (body: { email: string; password: string; role: UserRole }) =>
+    post<User>("/api/users", body),
+  updateUser: (
+    id: string,
+    body: Partial<{ email: string; password: string; role: UserRole; active: boolean }>,
+  ) => patch<User>(`/api/users/${id}`, body),
+  deleteUser: (id: string) =>
+    request<{ deleted: boolean }>(`/api/users/${id}`, { method: "DELETE" }),
+
   stats: () => request<Stats>("/api/stats"),
 
   games: () => request<{ games: Game[]; total: number }>("/api/games"),
