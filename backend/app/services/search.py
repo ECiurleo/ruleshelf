@@ -70,8 +70,13 @@ def role_info(conn: sqlite3.Connection) -> dict[str, dict[str, dict]]:
 
 
 def _precedence_multiplier(precedence: int) -> float:
-    """Errata (precedence 100) gets a 2x relevance boost, capped at 3x."""
-    return 1.0 + min(max(precedence, 0), 200) / 100.0
+    """Nudge errata above equally relevant core text without burying the rest.
+
+    The errata document is a long compilation, so a large multiplier made every
+    search return only errata chunks and hid the core rules they correct.
+    Precedence still breaks ties in favour of errata.
+    """
+    return 1.0 + min(max(precedence, 0), 200) / 1000.0
 
 
 def build_match_query(query: str) -> str:
@@ -292,6 +297,29 @@ def search_semantic(
     return ranked[:limit]
 
 
+def diversify(results: list[dict], limit: int, per_document: int | None = None) -> list[dict]:
+    """Cap how many chunks one document contributes to the final page.
+
+    A long errata compilation or campaign guide can otherwise fill every slot
+    with near-duplicates and hide the core rule that answers the question.
+    Remaining slots are backfilled when the library is too small to fill them.
+    """
+    if not results:
+        return []
+    per_document = per_document or max(3, min(6, limit // 4))
+    counts: dict[str, int] = {}
+    primary: list[dict] = []
+    overflow: list[dict] = []
+    for result in results:
+        document_id = result["document"]["id"] or result["chunk_id"]
+        if counts.get(document_id, 0) < per_document:
+            counts[document_id] = counts.get(document_id, 0) + 1
+            primary.append(result)
+        else:
+            overflow.append(result)
+    return (primary + overflow)[:limit]
+
+
 def rrf_merge(*ranked_lists: list[dict], limit: int) -> list[dict]:
     combined: dict[int, dict] = {}
     scores: dict[int, float] = {}
@@ -299,7 +327,7 @@ def rrf_merge(*ranked_lists: list[dict], limit: int) -> list[dict]:
         for position, item in enumerate(ranked):
             chunk_id = item["chunk_id"]
             combined.setdefault(chunk_id, item)
-            weight = 1.6 if item["document"].get("overrides") else 1.0
+            weight = 1.15 if item["document"].get("overrides") else 1.0
             scores[chunk_id] = scores.get(chunk_id, 0.0) + weight / (RRF_K + position + 1)
     ordered = sorted(combined.values(), key=lambda item: scores[item["chunk_id"]], reverse=True)
     for item in ordered:
@@ -323,7 +351,11 @@ def search(
     pool = max(limit * 4, 40)
 
     if mode == "keyword":
-        return search_keyword(conn, query, filters, limit, roles), "keyword", None
+        return (
+            diversify(search_keyword(conn, query, filters, pool, roles), limit),
+            "keyword",
+            None,
+        )
 
     if mode == "semantic":
         if not embedding:
@@ -332,8 +364,8 @@ def search(
                 409,
             )
         provider, model = embedding
-        results = search_semantic(conn, provider, model, query, filters, limit, roles)
-        return results, "semantic", None
+        results = search_semantic(conn, provider, model, query, filters, pool, roles)
+        return diversify(results, limit), "semantic", None
 
     # Hybrid: keyword always works, semantic is a bonus.
     keyword_hits = search_keyword(conn, query, filters, pool, roles)
@@ -348,5 +380,5 @@ def search(
         return keyword_hits[:limit], "keyword", f"Semantic search unavailable: {exc.message}"
     if not semantic_hits:
         return keyword_hits[:limit], "keyword", "No semantic matches yet; showing keyword results."
-    merged = rrf_merge(keyword_hits, semantic_hits, limit=limit)
-    return merged, "hybrid", None
+    merged = rrf_merge(keyword_hits, semantic_hits, limit=pool)
+    return diversify(merged, limit), "hybrid", None

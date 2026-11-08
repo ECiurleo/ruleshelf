@@ -67,8 +67,23 @@ def _escape_markdown(text: str) -> str:
     return _MD_SPECIAL.sub(r"\\\1", text)
 
 
+TIMING_SYSTEM = (
+    "Establish timing before applying a rule: identify the phase, step or trigger, "
+    "what has already happened by then, and whether the card or effect exists at "
+    "that point. Setup steps and round phases resolve in printed order; something "
+    "introduced after a step cannot be used during it. Respect when, after, before "
+    "and Response wording. If the excerpts do not fix the order, say so instead of "
+    "inventing one."
+)
+
+
 def system_prompt(conn: sqlite3.Connection) -> str:
-    return get_setting(conn, "system_prompt", DEFAULT_SYSTEM_PROMPT) or DEFAULT_SYSTEM_PROMPT
+    prompt = get_setting(conn, "system_prompt", DEFAULT_SYSTEM_PROMPT) or DEFAULT_SYSTEM_PROMPT
+    # Existing installs keep their stored prompt, so attach the timing rule here
+    # unless the prompt already carries it.
+    if "establish timing before applying a rule" in prompt.lower():
+        return prompt
+    return f"{prompt}\n\n{TIMING_SYSTEM}"
 
 
 def _citation_label(result: dict) -> str:
@@ -153,17 +168,29 @@ def build_messages(
         "when enabled, from BoardGameGeek forum threads.\n\n"
         f"{context}\n\n"
         f"Question: {query}\n\n"
-        "Answer using only these excerpts, citing the excerpt number in square "
-        "brackets after every rule statement. Rulebook excerpts are authoritative. "
-        "Excerpts labeled BGG FORUM are unofficial community posts: label any claim "
-        "taken from them as forum opinion and never let them override a rulebook "
-        "excerpt. If the rulebook answers the question, use it and ignore conflicting "
-        "forum snippets. Put the direct answer in the first sentence. When the "
-        "excerpts give a formula or table, do the arithmetic (for example Walk = "
-        "Movement x 2 and Run = Movement x 4) and state the numbers. When the "
-        "excerpts contain comparable entries (other species, weapons, and so on), "
-        "state the comparison explicitly with their values. If the excerpts do not "
-        "answer it, say what is missing."
+        "Timing comes first. Before applying a rule, identify the phase, step or "
+        "trigger the question depends on and what has already happened at that "
+        "point. Setup steps and round phases resolve in the order the rules print "
+        "them, so a card or effect introduced after a step cannot be used during "
+        "that step. Respect 'when', 'after', 'before' and 'Response' wording, and "
+        "resolve any ordering the excerpts give. When timing decides the answer, "
+        "state it in one short sentence before the ruling, for example: 'The path "
+        "deck is built at step 7 and arrival setup is step 8, so a card added after "
+        "arrival setup is not in the deck during setup.' If the excerpts do not fix "
+        "the order, say the order is unclear instead of inventing one.\n\n"
+        "Then answer directly: start with yes or no when the question asks whether "
+        "something can happen, and answer every part of a multi-part question. Give "
+        "the rule, exact dice, distances and costs, and do any arithmetic the "
+        "excerpts support (for example Walk = Movement x 2). When the excerpts "
+        "contain comparable entries (other species, weapons, and so on), state the "
+        "comparison explicitly with their values.\n\n"
+        "Use only these excerpts, citing the excerpt number in square brackets after "
+        "every rule statement. Rulebook excerpts are authoritative. Excerpts labeled "
+        "BGG FORUM are unofficial community posts: label any claim taken from them "
+        "as forum opinion and never let them override a rulebook excerpt. If the "
+        "rulebook answers the question, use it and ignore conflicting forum "
+        "snippets. Do not call the rules silent when their sequence settles the "
+        "question. If the excerpts truly do not answer it, say what is missing."
     )
 
     messages: list[dict] = [{"role": "system", "content": system_prompt(conn)}]
@@ -199,7 +226,8 @@ def build_community_messages(
         f"{context}\n\n"
         f"Question: {query}\n\n"
         "Answer using only these forum posts. Start with the community consensus, "
-        "then note meaningful disagreement or common house rules. Cite the excerpt "
+        "then note meaningful disagreement or common house rules, and say when a "
+        "post's answer depends on a particular step or timing. Cite the excerpt "
         "number in square brackets after each claim. Never present forum opinion as "
         "an official rule, and do not repeat the rulebook answer. If the posts do "
         "not answer the question, say so briefly."

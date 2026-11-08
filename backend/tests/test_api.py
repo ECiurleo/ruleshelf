@@ -444,6 +444,38 @@ def test_errata_outranks_identical_core_text(client, game):
     assert response["results"][1]["document"]["overrides"] is False
 
 
+def test_diversify_stops_one_document_filling_the_page():
+    from app.services.search import diversify
+
+    results = [
+        {
+            "chunk_id": f"a{index}",
+            "document": {"id": "errata"},
+        }
+        for index in range(6)
+    ] + [
+        {"chunk_id": f"b{index}", "document": {"id": "core"}} for index in range(2)
+    ]
+    selected = diversify(results, limit=5)
+    assert len(selected) == 5
+    assert sum(1 for item in selected if item["document"]["id"] == "errata") == 3
+    assert any(item["document"]["id"] == "core" for item in selected)
+
+
+def test_answer_prompt_reasons_about_step_order():
+    from app.db import db
+    from app.services.rag import build_messages
+
+    with db() as conn:
+        messages, _used = build_messages(conn, "Can this happen during setup?", [])
+
+    prompt = messages[-1]["content"]
+    assert "Timing comes first" in prompt
+    assert "cannot be used during that step" in prompt
+    assert "say the order is unclear" in prompt
+    assert "answer every part of a multi-part question" in prompt
+
+
 def test_rag_marks_errata_as_overriding():
     from app.services.rag import build_context, references_markdown
 

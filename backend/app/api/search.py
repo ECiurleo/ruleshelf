@@ -25,6 +25,7 @@ from app.services.rag import (
 from app.services.search import (
     SearchFilters,
     build_match_query,
+    diversify,
     role_info,
     rrf_merge,
     search,
@@ -88,8 +89,13 @@ def _answer_results(
             if keyword_hits:
                 lists.append(keyword_hits)
 
-    merged = rrf_merge(*lists, limit=limit)
-    return merged, "hybrid" if len(lists) > 1 else mode_used, note, queries
+    merged = rrf_merge(*lists, limit=max(limit * 3, 30))
+    return (
+        diversify(merged, limit),
+        "hybrid" if len(lists) > 1 else mode_used,
+        note,
+        queries,
+    )
 
 
 def _embedding_info(embedding: tuple[Provider, str] | None, mode_used: str) -> dict | None:
