@@ -398,6 +398,34 @@ def test_rag_marks_errata_as_overriding():
     assert "/api/documents/errata1/file#page=3" in markdown
 
 
+def test_rag_marks_bgg_forum_sources_as_unofficial():
+    from app.services.rag import build_context, references_markdown
+
+    results = [
+        {
+            "source_type": "bgg",
+            "url": "https://boardgamegeek.com/thread/123/rules-question",
+            "document": {
+                "id": "",
+                "title": "Rules question",
+                "role_label": "BGG forum",
+                "overrides": False,
+            },
+            "game": {"title": "Earthborne Rangers"},
+            "page_start": None,
+            "page_end": None,
+            "text": "The forum says to resolve the card this way.",
+        }
+    ]
+    context, used = build_context(results)
+    assert "BGG FORUM (unofficial)" in context
+    markdown = references_markdown(used)
+    assert "**BGG FORUM**" in markdown
+    assert "https://boardgamegeek.com/thread/123/rules-question" in markdown
+    assert "unofficial community post" in markdown
+    assert "/api/documents/" not in markdown
+
+
 def test_unsupported_upload_rejected(client, game):
     response = client.post(
         "/api/documents",

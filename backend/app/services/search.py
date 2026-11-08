@@ -165,6 +165,8 @@ def _row_to_result(row: sqlite3.Row, snippet: str, score: float, roles: dict) ->
         "score": score,
         "page_start": row["page_start"],
         "page_end": row["page_end"],
+        "source_type": "rules",
+        "url": None,
         "document": {
             "id": row["document_id"],
             "title": row["document_title"],

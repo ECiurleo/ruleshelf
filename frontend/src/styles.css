@@ -36,6 +36,9 @@
   --reader-text: #dedad2;
   --tint: rgba(255, 255, 255, 0.012);
   --spinner-track: rgba(168, 176, 189, 0.3);
+  --forum: #8ab8f2;
+  --forum-soft: rgba(88, 140, 210, 0.14);
+  --forum-border: rgba(88, 140, 210, 0.38);
   --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
   --sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   --mono: "SFMono-Regular", ui-monospace, "JetBrains Mono", Menlo, monospace;
@@ -77,6 +80,9 @@
   --reader-text: #2a2f35;
   --tint: rgba(0, 0, 0, 0.018);
   --spinner-track: rgba(0, 0, 0, 0.15);
+  --forum: #245a9e;
+  --forum-soft: rgba(36, 90, 158, 0.1);
+  --forum-border: rgba(36, 90, 158, 0.3);
   color-scheme: light;
 }
 
@@ -562,6 +568,35 @@ code {
   background: var(--accent-soft);
   border-color: rgba(224, 153, 95, 0.4);
   color: var(--accent-strong);
+}
+
+.bgg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.bgg-toggle input {
+  display: none;
+}
+
+.bgg-toggle:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+
+.bgg-toggle.on {
+  color: var(--forum);
+  border-color: var(--forum-border);
+  background: var(--forum-soft);
 }
 
 .search-submit {
@@ -1964,6 +1999,32 @@ code {
   border-color: rgba(230, 185, 107, 0.65);
 }
 
+.result-card.bgg {
+  border-color: var(--forum-border);
+  background: linear-gradient(180deg, var(--forum-soft), var(--panel) 70%);
+  box-shadow: inset 3px 0 0 var(--forum);
+}
+
+.result-card.bgg:hover {
+  border-color: var(--forum);
+}
+
+.forum-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--forum-border);
+  background: var(--forum-soft);
+  color: var(--forum);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+
 .errata-flag {
   display: inline-flex;
   align-items: center;
@@ -2893,7 +2954,8 @@ code {
     padding: 4px 7px;
     font-size: 11px;
   }
-  .ask-toggle span {
+  .ask-toggle span,
+  .bgg-toggle span {
     display: none;
   }
   .ask-toggle {

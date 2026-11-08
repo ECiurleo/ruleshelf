@@ -62,11 +62,13 @@ export interface Document {
 }
 
 export interface SearchResult {
-  chunk_id: number;
+  chunk_id: number | string;
   snippet: string;
   page_start: number | null;
   page_end: number | null;
   score: number;
+  source_type: "rules" | "bgg";
+  url: string | null;
   document: {
     id: string;
     title: string;
@@ -348,6 +350,7 @@ export interface AskPayload {
   model?: string;
   top_k?: number;
   temperature?: number;
+  include_bgg?: boolean;
   history?: { role: "user" | "assistant"; content: string }[];
 }
 
@@ -359,6 +362,8 @@ export interface AskHandlers {
     provider: string;
     model: string;
     embedding: EmbeddingInfo | null;
+    bgg_count?: number;
+    bgg_note?: string | null;
   }) => void;
   onToken: (text: string) => void;
   onError: (message: string) => void;

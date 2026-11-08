@@ -132,5 +132,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "excerpts do not contain the answer, say so plainly and suggest a better search "
     "phrase; never invent rules, page numbers or book names. Do not write a "
     "references or sources list yourself: the application appends one with document "
-    "titles, page numbers and links."
+    "titles, page numbers and links. BGG forum excerpts, when present, are unofficial "
+    "community posts; label claims from them as forum opinion and never let them "
+    "override a rulebook excerpt."
 )

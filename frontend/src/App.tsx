@@ -35,6 +35,8 @@ interface SearchMeta {
   provider?: string;
   model?: string;
   embedding?: { provider_name: string; model: string } | null;
+  bgg_count?: number;
+  bgg_note?: string | null;
 }
 
 export default function App() {
@@ -58,6 +60,9 @@ export default function App() {
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SearchMode>("hybrid");
   const [answerMode, setAnswerMode] = useState(false);
+  const [includeBgg, setIncludeBggState] = useState(
+    () => localStorage.getItem("ruleshelf:includeBgg") === "1",
+  );
   const [searchAllGames, setSearchAllGames] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const [searching, setSearching] = useState(false);
@@ -140,6 +145,11 @@ export default function App() {
   }, [theme]);
 
   const toggleTheme = () => setTheme((current) => (current === "dark" ? "light" : "dark"));
+
+  const setIncludeBgg = (value: boolean) => {
+    setIncludeBggState(value);
+    localStorage.setItem("ruleshelf:includeBgg", value ? "1" : "0");
+  };
 
   // Initial load
   useEffect(() => {
@@ -294,6 +304,7 @@ export default function App() {
           history,
           provider_id: chatChoice?.providerId,
           model: chatChoice?.model || undefined,
+          include_bgg: includeBgg,
         },
         {
           onSources: (payload) => {
@@ -304,6 +315,8 @@ export default function App() {
               provider: payload.provider,
               model: payload.model,
               embedding: payload.embedding,
+              bgg_count: payload.bgg_count ?? 0,
+              bgg_note: payload.bgg_note ?? null,
             });
           },
           onToken: (token) => {
@@ -368,6 +381,10 @@ export default function App() {
   };
 
   const openReaderForResult = (result: SearchResult) => {
+    if (result.source_type === "bgg" && result.url) {
+      window.open(result.url, "_blank", "noopener,noreferrer");
+      return;
+    }
     setReader({
       documentId: result.document.id,
       title: result.document.title,
@@ -615,6 +632,8 @@ export default function App() {
               bundle?.info.provider_names[bundle?.settings.default_chat_provider ?? ""] ?? ""
             }
             defaultChatModel={bundle?.settings.default_chat_model ?? ""}
+            includeBgg={includeBgg}
+            setIncludeBgg={setIncludeBgg}
           />
           <button
             className="icon-button topbar-theme"

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 from app.db import db, get_setting
 from app.providers import Provider, ProviderConfig, build_provider
 from app.providers.base import ProviderError
+from app.services.bgg import search_bgg
 from app.services.embeddings import resolve_embedding
 from app.services.rag import build_messages, references_markdown, rewrite_queries
 from app.services.search import (
@@ -110,6 +111,8 @@ def _public_result(result: dict) -> dict:
         "page_start": result["page_start"],
         "page_end": result["page_end"],
         "score": round(result["score"], 6),
+        "source_type": result.get("source_type", "rules"),
+        "url": result.get("url"),
         "document": result["document"],
         "game": result["game"],
     }
@@ -164,6 +167,7 @@ class AskRequest(BaseModel):
     model: str | None = None
     top_k: int | None = Field(default=None, ge=1, le=30)
     temperature: float | None = Field(default=None, ge=0, le=2)
+    include_bgg: bool = False
     history: list[dict] = Field(default_factory=list)
 
 
@@ -216,6 +220,26 @@ def ask(payload: AskRequest):
             raise HTTPException(exc.status_code, exc.message) from exc
         embedding_info = _embedding_info(embedding, mode_used)
 
+        bgg_results: list[dict] = []
+        bgg_note: str | None = None
+        if payload.include_bgg:
+            game_row = (
+                conn.execute(
+                    "SELECT title, game_type FROM games WHERE id = ?", (payload.game_id,)
+                ).fetchone()
+                if payload.game_id
+                else None
+            )
+            game_title = game_row["title"] if game_row else None
+            bgg_results, bgg_note = search_bgg(payload.query, game_title, limit=5)
+            for result in bgg_results:
+                result["game"] = {
+                    "id": payload.game_id or "",
+                    "title": game_title or "BoardGameGeek",
+                    "game_type": game_row["game_type"] if game_row else "other",
+                }
+            results = results + bgg_results
+
         messages, used = build_messages(conn, payload.query, results, payload.history)
         temperature = (
             payload.temperature
@@ -235,6 +259,8 @@ def ask(payload: AskRequest):
                 "model": model,
                 "embedding": embedding_info,
                 "expanded_queries": expanded_queries,
+                "bgg_count": len(bgg_results),
+                "bgg_note": bgg_note,
             },
         )
         answered = False

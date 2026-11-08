@@ -31,6 +31,8 @@ export function SearchBar({
   setChatChoice,
   defaultChatProvider,
   defaultChatModel,
+  includeBgg,
+  setIncludeBgg,
 }: {
   query: string;
   setQuery: (value: string) => void;
@@ -52,6 +54,8 @@ export function SearchBar({
   setChatChoice: (value: ModelChoice | null) => void;
   defaultChatProvider: string;
   defaultChatModel: string;
+  includeBgg: boolean;
+  setIncludeBgg: (value: boolean) => void;
 }) {
   const roleOptions = activeGame && !searchAllGames
     ? gameType?.roles ?? []
@@ -171,6 +175,20 @@ export function SearchBar({
             defaultModel={defaultChatModel}
             onChange={setChatChoice}
           />
+        )}
+        {answerMode && (
+          <label
+            className={`bgg-toggle ${includeBgg ? "on" : ""}`}
+            title="Also search BoardGameGeek forum threads via web search. Unofficial; rulebooks are prioritised."
+          >
+            <input
+              type="checkbox"
+              checked={includeBgg}
+              onChange={(event) => setIncludeBgg(event.target.checked)}
+            />
+            <Icon name="external" size={13} />
+            <span>BGG forums</span>
+          </label>
         )}
         <span className="filter-note">
           {mode === "semantic"

@@ -5,13 +5,16 @@ import { Icon } from "./Icon";
 
 function ResultCard({ result, onOpen }: { result: SearchResult; onOpen: () => void }) {
   const errata = result.document.overrides;
+  const forum = result.source_type === "bgg";
   return (
-    <article className={`result-card ${errata ? "errata" : ""}`} onClick={onOpen}>
+    <article className={`result-card ${errata ? "errata" : ""} ${forum ? "bgg" : ""}`} onClick={onOpen}>
       <div className="result-meta">
         <span className={`type-badge type-${result.game.game_type}`}>{result.game.title}</span>
         <span className="result-doc">{result.document.title}</span>
         <span className="dot-sep" />
-        {errata ? (
+        {forum ? (
+          <span className="forum-flag">BGG forum · unofficial</span>
+        ) : errata ? (
           <span className="errata-flag">Errata · overrides core rules</span>
         ) : (
           <span>{result.document.role_label}</span>
@@ -27,7 +30,7 @@ function ResultCard({ result, onOpen }: { result: SearchResult; onOpen: () => vo
           </>
         )}
         <span className="result-open">
-          <Icon name="chevron" size={15} />
+          <Icon name={forum ? "external" : "chevron"} size={15} />
         </span>
       </div>
       <p className="result-snippet" dangerouslySetInnerHTML={{ __html: result.snippet }} />
@@ -55,6 +58,8 @@ export function ResultsView({
     provider?: string;
     model?: string;
     embedding?: { provider_name: string; model: string } | null;
+    bgg_count?: number;
+    bgg_note?: string | null;
   } | null;
   answerMode: boolean;
   asking: boolean;
@@ -157,6 +162,11 @@ export function ResultsView({
                 </span>
               </span>
             )}
+            {(meta.bgg_count ?? 0) > 0 && (
+              <span className="forum-flag" title="Unofficial BoardGameGeek forum results">
+                BGG forums · {meta.bgg_count}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -168,6 +178,13 @@ export function ResultsView({
           <button className="button ghost small" onClick={onConfigure}>
             Settings
           </button>
+        </div>
+      )}
+
+      {meta?.bgg_note && (
+        <div className="banner subtle">
+          <Icon name="external" size={17} />
+          <div>{meta.bgg_note} Rulebook answers are unaffected.</div>
         </div>
       )}
 

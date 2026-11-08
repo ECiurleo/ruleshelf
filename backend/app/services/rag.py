@@ -74,6 +74,8 @@ def system_prompt(conn: sqlite3.Connection) -> str:
 def _citation_label(result: dict) -> str:
     game = result["game"]["title"]
     document = result["document"]["title"]
+    if result.get("source_type") == "bgg":
+        return f"BGG FORUM (unofficial) — {document} — {game}"
     role = result["document"].get("role_label") or ""
     page = result.get("page_start")
     parts = [game, document]
@@ -126,16 +128,21 @@ def build_messages(
         else ""
     )
     prompt = (
-        f"{priority}The numbered excerpts below come from the user's rulebooks.\n\n"
+        f"{priority}The numbered excerpts below come from the user's rulebooks and, "
+        "when enabled, from BoardGameGeek forum threads.\n\n"
         f"{context}\n\n"
         f"Question: {query}\n\n"
         "Answer using only these excerpts, citing the excerpt number in square "
-        "brackets after every rule statement. Put the direct answer in the first "
-        "sentence. When the excerpts give a formula or table, do the arithmetic "
-        "(for example Walk = Movement x 2 and Run = Movement x 4) and state the "
-        "numbers. When the excerpts contain comparable entries (other species, "
-        "weapons, and so on), state the comparison explicitly with their values. "
-        "If the excerpts do not answer it, say what is missing."
+        "brackets after every rule statement. Rulebook excerpts are authoritative. "
+        "Excerpts labeled BGG FORUM are unofficial community posts: label any claim "
+        "taken from them as forum opinion and never let them override a rulebook "
+        "excerpt. If the rulebook answers the question, use it and ignore conflicting "
+        "forum snippets. Put the direct answer in the first sentence. When the "
+        "excerpts give a formula or table, do the arithmetic (for example Walk = "
+        "Movement x 2 and Run = Movement x 4) and state the numbers. When the "
+        "excerpts contain comparable entries (other species, weapons, and so on), "
+        "state the comparison explicitly with their values. If the excerpts do not "
+        "answer it, say what is missing."
     )
 
     messages: list[dict] = [{"role": "system", "content": system_prompt(conn)}]
@@ -187,6 +194,14 @@ def references_markdown(results: Sequence[dict], refs: Sequence[int] | None = No
         url = f"/api/documents/{document['id']}/file"
         if page:
             url += f"#page={page}"
+
+        if result.get("source_type") == "bgg":
+            lines.append(
+                f"{number}. **BGG FORUM** "
+                f"[{_escape_markdown(document['title'])}]({result.get('url') or ''})"
+                f" — *{_escape_markdown(game['title'])}* · unofficial community post"
+            )
+            continue
 
         marker = "**ERRATA** " if document.get("overrides") else ""
         line = (
