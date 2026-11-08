@@ -257,7 +257,7 @@ def references_markdown(results: Sequence[dict], refs: Sequence[int] | None = No
 
         if result.get("source_type") == "bgg":
             lines.append(
-                f"{number}. **BGG FORUM** "
+                f"- **{number}.** **BGG FORUM** "
                 f"[{_escape_markdown(document['title'])}]({result.get('url') or ''})"
                 f" — *{_escape_markdown(game['title'])}* · unofficial community post"
             )
@@ -265,7 +265,8 @@ def references_markdown(results: Sequence[dict], refs: Sequence[int] | None = No
 
         marker = "**ERRATA** " if document.get("overrides") else ""
         line = (
-            f"{number}. {marker}[{_escape_markdown(document['title'])}{location}]({url})"
+            f"- **{number}.** {marker}"
+            f"[{_escape_markdown(document['title'])}{location}]({url})"
             f" — *{_escape_markdown(game['title'])}*"
         )
         role = document.get("role_label")

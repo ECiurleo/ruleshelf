@@ -381,7 +381,7 @@ def test_references_include_document_page_and_link():
     # Only cited excerpts are listed, keeping the original [n] numbering.
     cited = references_markdown(results, refs=[2])
     assert "Core Rules" not in cited
-    assert "2. [Zoo" in cited
+    assert "**2.** [Zoo" in cited
 
 
 def test_rewrite_queries_filters_and_limits():
