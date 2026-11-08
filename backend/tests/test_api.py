@@ -190,6 +190,76 @@ def test_config_snapshot_is_written_and_restored(client):
         assert get_setting(conn, "rag_top_k") == "9"
 
 
+def test_campaign_groups_and_stages(client, game):
+    campaign = client.post(
+        f"/api/games/{game['id']}/campaigns",
+        json={"title": "The Enemy Within"},
+    )
+    assert campaign.status_code == 201, campaign.text
+    campaign_id = campaign.json()["id"]
+
+    stage = upload_document(
+        client,
+        game["id"],
+        role="campaign",
+        title="Shadows over Bögenhafen",
+        campaign_id=campaign_id,
+    )
+    ready = wait_until_ready(client, stage["id"])
+    assert ready["campaign_id"] == campaign_id
+    assert ready["campaign_title"] == "The Enemy Within"
+
+    listing = client.get(f"/api/games/{game['id']}/campaigns").json()
+    assert listing["total"] == 1
+    assert listing["campaigns"][0]["document_count"] == 1
+
+    # Move the stage out and back.
+    cleared = client.patch(f"/api/documents/{stage['id']}", json={"campaign_id": None}).json()
+    assert cleared["campaign_id"] is None
+    assert client.get(f"/api/games/{game['id']}/campaigns").json()["campaigns"][0][
+        "document_count"
+    ] == 0
+
+    moved = client.patch(
+        f"/api/documents/{stage['id']}", json={"campaign_id": campaign_id}
+    ).json()
+    assert moved["campaign_title"] == "The Enemy Within"
+
+    # Deleting a campaign ungroups its stages instead of deleting them.
+    assert client.delete(f"/api/campaigns/{campaign_id}").json()["ungrouped"] == 1
+    still_there = client.get(f"/api/documents/{stage['id']}").json()
+    assert still_there["campaign_id"] is None
+
+    # Campaign-only validation.
+    other = client.post(
+        f"/api/games/{game['id']}/campaigns", json={"title": "Other"}
+    ).json()
+    response = client.post(
+        "/api/documents",
+        data={
+            "game_id": game["id"],
+            "role": "core",
+            "title": "Invalid",
+            "campaign_id": other["id"],
+        },
+        files={"file": ("rules.txt", b"hello", "text/plain")},
+    )
+    assert response.status_code == 400
+
+
+def test_campaigns_are_deleted_with_the_game(client, game):
+    campaign = client.post(
+        f"/api/games/{game['id']}/campaigns", json={"title": "Temp"}
+    ).json()
+    document = upload_document(
+        client, game["id"], role="campaign", title="Stage", campaign_id=campaign["id"]
+    )
+    wait_until_ready(client, document["id"])
+    assert client.delete(f"/api/games/{game['id']}").status_code == 200
+    with db() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM campaigns").fetchone()[0] == 0
+
+
 def test_thumbnail_is_generated_and_removed(client, game):
     document = upload_document(client, game["id"])
     ready = wait_until_ready(client, document["id"])
@@ -351,4 +421,12 @@ def test_sqlite_schema_has_fts(client):
             row["name"]
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view')")
         }
-    assert {"games", "documents", "chunks", "chunks_fts", "embeddings", "providers"} <= tables
+    assert {
+        "games",
+        "documents",
+        "campaigns",
+        "chunks",
+        "chunks_fts",
+        "embeddings",
+        "providers",
+    } <= tables

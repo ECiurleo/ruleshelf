@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Document } from "../lib/api";
+import type { Campaign, Document } from "../lib/api";
 import { plural } from "../lib/api";
 import { Icon } from "./Icon";
 
@@ -12,12 +12,16 @@ const STATUS_LABEL: Record<Document["status"], string> = {
 
 export function DocumentCoverCard({
   document: doc,
+  campaigns,
+  onCampaignChange,
   onOpen,
   onReindex,
   onDelete,
   onRetitle,
 }: {
   document: Document;
+  campaigns?: Campaign[];
+  onCampaignChange?: (campaignId: string | null) => void;
   onOpen: () => void;
   onReindex: () => void;
   onDelete: () => void;
@@ -98,6 +102,23 @@ export function DocumentCoverCard({
         </div>
 
         <div className="cover-info">
+          {doc.role === "campaign" && campaigns && campaigns.length > 0 && onCampaignChange && (
+            <select
+              className="cover-campaign"
+              value={doc.campaign_id ?? ""}
+              onChange={(event) => onCampaignChange(event.target.value || null)}
+              onClick={(event) => event.stopPropagation()}
+              onMouseDown={(event) => event.stopPropagation()}
+              title="Campaign"
+            >
+              <option value="">Ungrouped</option>
+              {campaigns.map((campaign) => (
+                <option key={campaign.id} value={campaign.id}>
+                  {campaign.title}
+                </option>
+              ))}
+            </select>
+          )}
           {doc.status !== "ready" && (
             <span className={`status-chip cover-status ${doc.status}`}>
               {busy && <span className="spinner" />}

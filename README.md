@@ -38,6 +38,8 @@ docker compose up -d      # then open http://localhost:8080
   (OpenRouter, LM Studio, vLLM, LiteLLM, Azure gateways…). Adding another API dialect is one file.
 - **Choose the model per question.** The search bar lists every chat model reported by your enabled
   providers; pick one before asking. Answers show the exact answer model and embedding model used.
+- **Campaigns with stages.** Create a campaign group (for example *The Enemy Within*) and file
+  each stage/book under it. Stages can be moved between campaigns without re-uploading.
 - **Data-driven game types.** Built-in RPG / board game / wargame types, and custom types with
   custom roles can be added in Settings.
 - **One container, one volume.** ~180 MB compressed, multi-arch (`amd64` and `arm64`).
@@ -257,6 +259,11 @@ After choosing an embedding model for an existing library, run **Build embedding
 Roles are per game type and can be changed (or new types added) in **Settings → Game types**.
 A role can carry a `precedence` value; errata ships with `100`, which boosts it above normal rules
 and marks its results as overriding.
+
+Campaigns are groups inside the campaign role. In a game, open **Campaigns → New campaign**, name it
+(e.g. *The Enemy Within*), then use **Add stage** to upload each book into it. Existing campaign
+documents appear under *Ungrouped campaign documents*; use the campaign menu on each book to move
+them into a group. Deleting a campaign keeps its documents and ungroups them.
 
 ![A game shelf with core rules, supplements and a campaign](docs/screenshots/game.png)
 

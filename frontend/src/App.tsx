@@ -3,6 +3,7 @@ import {
   api,
   ask,
   type AppSettings,
+  type Campaign,
   type Document,
   type Game,
   type GameType,
@@ -19,6 +20,7 @@ import { ReaderDrawer, type ReaderTarget } from "./components/ReaderDrawer";
 import { AddGameDialog } from "./components/AddGameDialog";
 import { UploadDialog } from "./components/UploadDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { CampaignDialog } from "./components/CampaignDialog";
 import { Icon } from "./components/Icon";
 
 interface Toast {
@@ -46,6 +48,7 @@ export default function App() {
 
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -75,6 +78,8 @@ export default function App() {
   const [addGameOpen, setAddGameOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
   const [uploadRole, setUploadRole] = useState<string | null>(null);
+  const [uploadCampaignId, setUploadCampaignId] = useState<string | null>(null);
+  const [campaignDialog, setCampaignDialog] = useState<{ campaign?: Campaign } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [toast, setToast] = useState<Toast | null>(null);
@@ -114,6 +119,15 @@ export default function App() {
     setDocuments(result.documents);
   }, []);
 
+  const refreshCampaigns = useCallback(async (gameId: string | null) => {
+    if (!gameId) {
+      setCampaigns([]);
+      return;
+    }
+    const result = await api.campaigns(gameId);
+    setCampaigns(result.campaigns);
+  }, []);
+
   // Initial load
   useEffect(() => {
     refreshLibrary()
@@ -144,7 +158,7 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     setDocsLoading(Boolean(activeGameId));
-    refreshDocuments(activeGameId)
+    Promise.all([refreshDocuments(activeGameId), refreshCampaigns(activeGameId)])
       .catch((err: Error) => notify(err.message, "error"))
       .finally(() => {
         if (!cancelled) setDocsLoading(false);
@@ -159,7 +173,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeGameId, refreshDocuments, notify]);
+  }, [activeGameId, refreshDocuments, refreshCampaigns, notify]);
 
   // Drop a remembered model if its provider was removed or disabled.
   useEffect(() => {
@@ -362,6 +376,7 @@ export default function App() {
     try {
       await api.deleteGame(activeGame.id);
       await refreshLibrary();
+      await refreshCampaigns(null);
       navigate(null);
       notify("Game deleted.", "ok");
     } catch (err) {
@@ -373,7 +388,7 @@ export default function App() {
     if (!window.confirm(`Delete "${doc.title}"? This removes its index and file.`)) return;
     try {
       await api.deleteDocument(doc.id);
-      await refreshDocuments(activeGameId);
+      await Promise.all([refreshDocuments(activeGameId), refreshCampaigns(activeGameId)]);
       await refreshLibrary();
       notify("Document deleted.", "ok");
     } catch (err) {
@@ -395,6 +410,32 @@ export default function App() {
     try {
       await api.updateDocument(doc.id, { title });
       await refreshDocuments(activeGameId);
+    } catch (err) {
+      notify((err as Error).message, "error");
+    }
+  };
+
+  const assignCampaign = async (doc: Document, campaignId: string | null) => {
+    try {
+      await api.updateDocument(doc.id, { campaign_id: campaignId });
+      await Promise.all([refreshDocuments(activeGameId), refreshCampaigns(activeGameId)]);
+    } catch (err) {
+      notify((err as Error).message, "error");
+    }
+  };
+
+  const deleteCampaign = async (campaign: Campaign) => {
+    if (
+      !window.confirm(
+        `Delete the campaign "${campaign.title}"? Its documents are kept and become ungrouped.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.deleteCampaign(campaign.id);
+      await Promise.all([refreshDocuments(activeGameId), refreshCampaigns(activeGameId)]);
+      notify(`Campaign "${campaign.title}" removed; documents kept.`, "ok");
     } catch (err) {
       notify((err as Error).message, "error");
     }
@@ -447,10 +488,18 @@ export default function App() {
           game={activeGame}
           gameType={activeGameType}
           documents={documents}
+          campaigns={campaigns}
           embeddingConfigured={bundle?.info.embedding_ready ?? false}
-          onUpload={(role) => setUploadRole(role)}
+          onUpload={(role, campaignId) => {
+            setUploadRole(role);
+            setUploadCampaignId(campaignId ?? null);
+          }}
           onEdit={() => setEditingGame(activeGame)}
           onDelete={deleteGame}
+          onCampaignCreate={() => setCampaignDialog({})}
+          onCampaignEdit={(campaign) => setCampaignDialog({ campaign })}
+          onCampaignDelete={deleteCampaign}
+          onAssignCampaign={assignCampaign}
           onOpenDoc={openReaderForDocument}
           onReindexDoc={reindexDocument}
           onDeleteDoc={deleteDocument}
@@ -586,14 +635,37 @@ export default function App() {
           game={activeGame}
           gameType={activeGameType}
           formats={bundle?.info.formats ?? []}
+          campaigns={campaigns}
           initialRole={uploadRole}
-          onClose={() => setUploadRole(null)}
+          initialCampaignId={uploadCampaignId}
+          onClose={() => {
+            setUploadRole(null);
+            setUploadCampaignId(null);
+          }}
           onUploaded={async () => {
-            await refreshDocuments(activeGame.id);
+            await Promise.all([
+              refreshDocuments(activeGame.id),
+              refreshCampaigns(activeGame.id),
+            ]);
             const gameList = await api.games();
             setGames(gameList.games);
           }}
           notify={notify}
+        />
+      )}
+
+      {campaignDialog && activeGame && (
+        <CampaignDialog
+          gameId={activeGame.id}
+          campaign={campaignDialog.campaign}
+          onClose={() => setCampaignDialog(null)}
+          onSaved={async () => {
+            await Promise.all([
+              refreshCampaigns(activeGame.id),
+              refreshDocuments(activeGame.id),
+            ]);
+            notify(campaignDialog.campaign ? "Campaign updated." : "Campaign created.", "ok");
+          }}
         />
       )}
 

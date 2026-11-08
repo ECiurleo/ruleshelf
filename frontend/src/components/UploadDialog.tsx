@@ -1,5 +1,12 @@
 import { useRef, useState } from "react";
-import { api, formatBytes, type FormatInfo, type Game, type GameType } from "../lib/api";
+import {
+  api,
+  formatBytes,
+  type Campaign,
+  type FormatInfo,
+  type Game,
+  type GameType,
+} from "../lib/api";
 import { Modal } from "./Modal";
 import { Icon } from "./Icon";
 
@@ -16,7 +23,9 @@ export function UploadDialog({
   game,
   gameType,
   formats,
+  campaigns,
   initialRole,
+  initialCampaignId,
   onClose,
   onUploaded,
   notify,
@@ -24,12 +33,15 @@ export function UploadDialog({
   game: Game;
   gameType: GameType | undefined;
   formats: FormatInfo[];
+  campaigns: Campaign[];
   initialRole: string;
+  initialCampaignId?: string | null;
   onClose: () => void;
   onUploaded: () => void;
   notify: (message: string, kind?: "ok" | "error") => void;
 }) {
   const [role, setRole] = useState(initialRole);
+  const [campaignId, setCampaignId] = useState(initialCampaignId ?? "");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -67,7 +79,13 @@ export function UploadDialog({
         current.map((entry) => (entry.id === item.id ? { ...entry, status: "uploading" } : entry)),
       );
       try {
-        await api.uploadDocument(game.id, role, item.file);
+        await api.uploadDocument(
+          game.id,
+          role,
+          item.file,
+          undefined,
+          role === "campaign" ? campaignId || null : null,
+        );
         setQueue((current) =>
           current.map((entry) => (entry.id === item.id ? { ...entry, status: "done" } : entry)),
         );
@@ -126,6 +144,29 @@ export function UploadDialog({
           ))}
         </select>
       </label>
+
+      {role === "campaign" && (
+        <label className="field">
+          <span>Campaign</span>
+          <select
+            value={campaignId}
+            onChange={(event) => setCampaignId(event.target.value)}
+            disabled={busy}
+          >
+            <option value="">Ungrouped campaign document</option>
+            {campaigns.map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.title}
+              </option>
+            ))}
+          </select>
+          {campaigns.length === 0 && (
+            <small className="fine-print">
+              Create a campaign from the game view first to file this stage.
+            </small>
+          )}
+        </label>
+      )}
 
       <div
         className={`dropzone ${dragging ? "dragging" : ""}`}

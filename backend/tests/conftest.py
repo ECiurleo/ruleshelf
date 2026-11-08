@@ -35,6 +35,7 @@ def clean_library():
         conn.execute("DELETE FROM chunks_fts")
         conn.execute("DELETE FROM chunks")
         conn.execute("DELETE FROM documents")
+        conn.execute("DELETE FROM campaigns")
         conn.execute("DELETE FROM games")
         conn.execute("DELETE FROM jobs")
     for path in FILES_DIR.glob("*"):
@@ -76,10 +77,20 @@ def make_text_document(pages: list[str] | None = None) -> bytes:
     return "\f".join(pages or SAMPLE_PAGES).encode("utf-8")
 
 
-def upload_document(client, game_id: str, *, role: str = "core", title: str = "Core Rules"):
+def upload_document(
+    client,
+    game_id: str,
+    *,
+    role: str = "core",
+    title: str = "Core Rules",
+    campaign_id: str | None = None,
+):
+    data = {"game_id": game_id, "role": role, "title": title}
+    if campaign_id:
+        data["campaign_id"] = campaign_id
     response = client.post(
         "/api/documents",
-        data={"game_id": game_id, "role": role, "title": title},
+        data=data,
         files={"file": (f"{uuid.uuid4().hex}.txt", make_text_document(), "text/plain")},
     )
     assert response.status_code == 201, response.text

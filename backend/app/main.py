@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import documents, games, meta, providers, search
+from app.api import campaigns, documents, games, meta, providers, search
 from app.config import APP_NAME, APP_VERSION, DATA_DIR
 from app.db import init_db
 from app.extractors import ExtractionError
@@ -68,7 +68,14 @@ async def extraction_error_handler(_request, exc: ExtractionError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-for router in (games.router, documents.router, search.router, providers.router, meta.router):
+for router in (
+    games.router,
+    campaigns.router,
+    documents.router,
+    search.router,
+    providers.router,
+    meta.router,
+):
     app.include_router(router)
 
 

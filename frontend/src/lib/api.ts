@@ -30,11 +30,23 @@ export interface Game {
 
 export type DocumentStatus = "pending" | "processing" | "ready" | "error";
 
+export interface Campaign {
+  id: string;
+  game_id: string;
+  title: string;
+  description: string;
+  sort_order: number;
+  document_count: number;
+  created_at: string;
+}
+
 export interface Document {
   id: string;
   game_id: string;
   title: string;
   role: string;
+  campaign_id: string | null;
+  campaign_title: string | null;
   sort_order: number;
   original_filename: string;
   content_type: string;
@@ -217,6 +229,21 @@ export const api = {
     patch<Game>(`/api/games/${id}`, body),
   deleteGame: (id: string) => request<{ deleted: boolean }>(`/api/games/${id}`, { method: "DELETE" }),
 
+  campaigns: (gameId: string) =>
+    request<{ campaigns: Campaign[]; total: number }>(
+      `/api/games/${encodeURIComponent(gameId)}/campaigns`,
+    ),
+  createCampaign: (gameId: string, body: { title: string; description: string }) =>
+    post<Campaign>(`/api/games/${encodeURIComponent(gameId)}/campaigns`, body),
+  updateCampaign: (
+    id: string,
+    body: Partial<Pick<Campaign, "title" | "description" | "sort_order">>,
+  ) => patch<Campaign>(`/api/campaigns/${id}`, body),
+  deleteCampaign: (id: string) =>
+    request<{ deleted: boolean; ungrouped: number }>(`/api/campaigns/${id}`, {
+      method: "DELETE",
+    }),
+
   gameTypes: () => request<{ game_types: GameType[] }>("/api/game-types"),
   createGameType: (body: Omit<GameType, "builtin" | "game_count">) =>
     post<GameType>("/api/game-types", body),
@@ -227,16 +254,30 @@ export const api = {
     request<{ documents: Document[]; total: number }>(
       `/api/documents${gameId ? `?game_id=${encodeURIComponent(gameId)}` : ""}`,
     ),
-  uploadDocument: (gameId: string, role: string, file: File, title?: string) => {
+  uploadDocument: (
+    gameId: string,
+    role: string,
+    file: File,
+    title?: string,
+    campaignId?: string | null,
+  ) => {
     const form = new FormData();
     form.set("game_id", gameId);
     form.set("role", role);
     if (title) form.set("title", title);
+    if (campaignId) form.set("campaign_id", campaignId);
     form.set("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
-  updateDocument: (id: string, body: { title?: string; role?: string; sort_order?: number }) =>
-    patch<Document>(`/api/documents/${id}`, body),
+  updateDocument: (
+    id: string,
+    body: {
+      title?: string;
+      role?: string;
+      campaign_id?: string | null;
+      sort_order?: number;
+    },
+  ) => patch<Document>(`/api/documents/${id}`, body),
   deleteDocument: (id: string) =>
     request<{ deleted: boolean }>(`/api/documents/${id}`, { method: "DELETE" }),
   reindexDocument: (id: string) =>

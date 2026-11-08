@@ -19,7 +19,7 @@ from app.defaults import BUILTIN_PROVIDERS, DEFAULT_SYSTEM_PROMPT, GAME_TYPES
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS games (
@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS documents (
     game_id           TEXT NOT NULL,
     title             TEXT NOT NULL,
     role              TEXT NOT NULL DEFAULT 'core',
+    campaign_id       TEXT,
     sort_order        INTEGER NOT NULL DEFAULT 0,
     original_filename TEXT NOT NULL DEFAULT '',
     stored_name       TEXT NOT NULL DEFAULT '',
@@ -57,6 +58,17 @@ CREATE TABLE IF NOT EXISTS documents (
     indexed_at        TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_documents_game ON documents(game_id);
+CREATE INDEX IF NOT EXISTS idx_documents_campaign ON documents(campaign_id);
+
+CREATE TABLE IF NOT EXISTS campaigns (
+    id          TEXT PRIMARY KEY,
+    game_id     TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    sort_order  INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_campaigns_game ON campaigns(game_id);
 
 CREATE TABLE IF NOT EXISTS chunks (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,12 +173,37 @@ def init_db() -> None:
     FILES_DIR.mkdir(parents=True, exist_ok=True)
     with db() as conn:
         version = conn.execute("PRAGMA user_version").fetchone()[0]
-        if version < 1:
+        if version == 0:
             log.info("Creating database schema v1")
             conn.executescript(SCHEMA_V1)
-            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-        # Future migrations go here, e.g.:
-        # if version < 3: conn.execute("ALTER TABLE ...")
+            version = SCHEMA_VERSION
+
+        if version < 3:
+            log.info("Migrating database to schema v3 (campaigns)")
+            columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(documents)")
+            }
+            if "campaign_id" not in columns:
+                conn.execute("ALTER TABLE documents ADD COLUMN campaign_id TEXT")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS campaigns (
+                    id          TEXT PRIMARY KEY,
+                    game_id     TEXT NOT NULL,
+                    title       TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    sort_order  INTEGER NOT NULL DEFAULT 0,
+                    created_at  TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_campaigns_game ON campaigns(game_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_documents_campaign ON documents(campaign_id)"
+            )
+            version = 3
+
+        conn.execute(f"PRAGMA user_version = {version}")
         _seed(conn)
 
 

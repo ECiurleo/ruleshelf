@@ -1,17 +1,29 @@
 import { useState } from "react";
-import { plural, type Document, type Game, type GameType } from "../lib/api";
+import {
+  plural,
+  type Campaign,
+  type Document,
+  type Game,
+  type GameType,
+} from "../lib/api";
 import { Icon } from "./Icon";
 import { DocumentCard } from "./DocumentCard";
 import { DocumentCoverCard } from "./DocumentCoverCard";
+import { CampaignGroup } from "./CampaignGroup";
 
 export function GameView({
   game,
   gameType,
   documents,
+  campaigns,
   embeddingConfigured,
   onUpload,
   onEdit,
   onDelete,
+  onCampaignCreate,
+  onCampaignEdit,
+  onCampaignDelete,
+  onAssignCampaign,
   onOpenDoc,
   onReindexDoc,
   onDeleteDoc,
@@ -20,10 +32,15 @@ export function GameView({
   game: Game;
   gameType: GameType | undefined;
   documents: Document[];
+  campaigns: Campaign[];
   embeddingConfigured: boolean;
-  onUpload: (role: string) => void;
+  onUpload: (role: string, campaignId?: string | null) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onCampaignCreate: () => void;
+  onCampaignEdit: (campaign: Campaign) => void;
+  onCampaignDelete: (campaign: Campaign) => void;
+  onAssignCampaign: (doc: Document, campaignId: string | null) => void;
   onOpenDoc: (doc: Document) => void;
   onReindexDoc: (doc: Document) => void;
   onDeleteDoc: (doc: Document) => void;
@@ -51,6 +68,29 @@ export function GameView({
     (doc) => doc.status === "pending" || doc.status === "processing",
   ).length;
   const errataCount = documents.filter((doc) => doc.role === "errata").length;
+
+  const campaignDocs = documents.filter((doc) => doc.role === "campaign");
+  const campaignIds = new Set(campaigns.map((campaign) => campaign.id));
+  const ungrouped = campaignDocs.filter(
+    (doc) => !doc.campaign_id || !campaignIds.has(doc.campaign_id),
+  );
+  const groups: { campaign: Campaign | null; documents: Document[] }[] = campaigns.map(
+    (campaign) => ({
+      campaign,
+      documents: campaignDocs.filter((doc) => doc.campaign_id === campaign.id),
+    }),
+  );
+  if (ungrouped.length) {
+    groups.push({ campaign: null, documents: ungrouped });
+  }
+
+  const docProps = (doc: Document) => ({
+    document: doc,
+    onOpen: () => onOpenDoc(doc),
+    onReindex: () => onReindexDoc(doc),
+    onDelete: () => onDeleteDoc(doc),
+    onRetitle: (title: string) => onRetitleDoc(doc, title),
+  });
 
   return (
     <div className="view game-view">
@@ -117,7 +157,7 @@ export function GameView({
         </div>
       </header>
 
-      {documents.length === 0 ? (
+      {documents.length === 0 && campaigns.length === 0 ? (
         <div className="empty-panel">
           <span className="empty-mark">
             <Icon name="book" size={28} />
@@ -135,6 +175,64 @@ export function GameView({
       ) : (
         <div className="role-sections">
           {sections.map((role) => {
+            if (role.id === "campaign") {
+              const campaignCount = campaigns.length;
+              return (
+                <section className="role-section campaign-section" key={role.id}>
+                  <div className="role-heading">
+                    <h2>{role.label}</h2>
+                    <div className="role-heading-right">
+                      <span className="role-count">
+                        {plural(campaignCount, "campaign")} ·{" "}
+                        {plural(campaignDocs.length, "book")}
+                      </span>
+                      <button className="button ghost small" onClick={onCampaignCreate}>
+                        <Icon name="plus" size={15} /> New campaign
+                      </button>
+                    </div>
+                  </div>
+
+                  {groups.length ? (
+                    <div className="campaign-groups">
+                      {groups.map((group) => (
+                        <CampaignGroup
+                          key={group.campaign?.id ?? "ungrouped"}
+                          campaign={group.campaign}
+                          documents={group.documents}
+                          campaigns={campaigns}
+                          view={view}
+                          embeddingConfigured={embeddingConfigured}
+                          onUpload={(campaignId) => onUpload("campaign", campaignId)}
+                          onEdit={group.campaign ? onCampaignEdit : undefined}
+                          onDelete={group.campaign ? onCampaignDelete : undefined}
+                          onOpenDoc={onOpenDoc}
+                          onReindexDoc={onReindexDoc}
+                          onDeleteDoc={onDeleteDoc}
+                          onRetitleDoc={onRetitleDoc}
+                          onAssignCampaign={onAssignCampaign}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="empty-panel compact campaign-empty">
+                      <span className="empty-mark">
+                        <Icon name="book" size={24} />
+                      </span>
+                      <h2>Group campaigns into stages</h2>
+                      <p>
+                        Create a campaign such as <em>The Enemy Within</em>, then add each stage
+                        as its own document. Existing campaign books can be assigned from each
+                        book's campaign menu.
+                      </p>
+                      <button className="button primary" onClick={onCampaignCreate}>
+                        <Icon name="plus" size={16} /> New campaign
+                      </button>
+                    </div>
+                  )}
+                </section>
+              );
+            }
+
             const docs = documents.filter((doc) => doc.role === role.id);
             if (!docs.length && role.id !== "core") return null;
             return (
@@ -155,23 +253,12 @@ export function GameView({
                   <div className={view === "grid" ? "document-grid" : "document-list"}>
                     {docs.map((doc) =>
                       view === "grid" ? (
-                        <DocumentCoverCard
-                          key={doc.id}
-                          document={doc}
-                          onOpen={() => onOpenDoc(doc)}
-                          onReindex={() => onReindexDoc(doc)}
-                          onDelete={() => onDeleteDoc(doc)}
-                          onRetitle={(title) => onRetitleDoc(doc, title)}
-                        />
+                        <DocumentCoverCard key={doc.id} {...docProps(doc)} />
                       ) : (
                         <DocumentCard
                           key={doc.id}
-                          document={doc}
+                          {...docProps(doc)}
                           embeddingConfigured={embeddingConfigured}
-                          onOpen={() => onOpenDoc(doc)}
-                          onReindex={() => onReindexDoc(doc)}
-                          onDelete={() => onDeleteDoc(doc)}
-                          onRetitle={(title) => onRetitleDoc(doc, title)}
                         />
                       ),
                     )}

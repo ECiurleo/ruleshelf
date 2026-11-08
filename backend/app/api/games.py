@@ -144,5 +144,6 @@ def delete_game(game_id: str):
             if stored and stored.exists():
                 stored.unlink(missing_ok=True)
         conn.execute("DELETE FROM documents WHERE game_id = ?", (game_id,))
+        conn.execute("DELETE FROM campaigns WHERE game_id = ?", (game_id,))
         conn.execute("DELETE FROM games WHERE id = ?", (game_id,))
     return {"deleted": True, "documents": len(docs)}
