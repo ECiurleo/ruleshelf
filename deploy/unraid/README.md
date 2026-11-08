@@ -36,8 +36,10 @@ Template: [`ollama.xml`](ollama.xml). It maps port `11434` and mounts
 
 ```bash
 docker exec Ollama ollama pull nomic-embed-text
-docker exec Ollama ollama pull llama3.1:8b-instruct-q4_K_M
+docker exec Ollama ollama pull qwen2.5:14b-instruct-q4_K_M   # quality, ~60s/answer
+docker exec Ollama ollama pull llama3.1:8b-instruct-q4_K_M   # faster, ~30s/answer
 ```
 
 Then in Ruleshelf **Settings → AI providers → Ollama**, set the chat model to
-`llama3.1:8b-instruct-q4_K_M` and the embedding model to `nomic-embed-text`.
+`qwen2.5:14b-instruct-q4_K_M` (or the 8B for speed) and the embedding model to
+`nomic-embed-text`.

@@ -188,8 +188,9 @@ Ollama driver requests 8192 tokens). Measured on an 8-core Ryzen 7 5825U with **
 | `llama3.1:8b-instruct-q4_K_M` | 4.9 GB | ~6 GB | 15–35 s |
 | `qwen2.5:14b-instruct-q4_K_M` | 9.0 GB | ~11 GB | 60–90 s |
 
-The 8B model is the recommended default. The 14B model handled conflicting errata more reliably
-in testing; a 7B model was fast but confused errata with superseded core rules. If you have no
+The **14B model is the default recommendation**: it correctly treated errata as replacing the
+superseded core rule in testing. The 8B is roughly twice as fast but occasionally mixed old core
+rows into errata answers. A 7B model was faster still but unreliable on precedence. If you have no
 spare RAM, run the 8B, or point Ruleshelf at a hosted provider instead.
 
 Ollama's default context window is 2048 tokens, which truncates RAG prompts. Ruleshelf requests
