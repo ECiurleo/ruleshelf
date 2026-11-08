@@ -3,6 +3,8 @@ export type GameTypeId = string;
 export interface Role {
   id: string;
   label: string;
+  /** Higher values take precedence over normal rules (errata = 100). */
+  precedence?: number;
 }
 
 export interface GameType {
@@ -52,7 +54,14 @@ export interface SearchResult {
   page_start: number | null;
   page_end: number | null;
   score: number;
-  document: { id: string; title: string; role: string; role_label: string };
+  document: {
+    id: string;
+    title: string;
+    role: string;
+    role_label: string;
+    precedence: number;
+    overrides: boolean;
+  };
   game: { id: string; title: string; game_type: string };
 }
 

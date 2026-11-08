@@ -4,13 +4,18 @@ import type { SearchResult } from "../lib/api";
 import { Icon } from "./Icon";
 
 function ResultCard({ result, onOpen }: { result: SearchResult; onOpen: () => void }) {
+  const errata = result.document.overrides;
   return (
-    <article className="result-card" onClick={onOpen}>
+    <article className={`result-card ${errata ? "errata" : ""}`} onClick={onOpen}>
       <div className="result-meta">
         <span className={`type-badge type-${result.game.game_type}`}>{result.game.title}</span>
         <span className="result-doc">{result.document.title}</span>
         <span className="dot-sep" />
-        <span>{result.document.role_label}</span>
+        {errata ? (
+          <span className="errata-flag">Errata · overrides core rules</span>
+        ) : (
+          <span>{result.document.role_label}</span>
+        )}
         {result.page_start && (
           <>
             <span className="dot-sep" />

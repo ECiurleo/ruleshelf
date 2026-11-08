@@ -51,15 +51,27 @@ class SearchFilters:
         return clauses, params
 
 
-def role_labels(conn: sqlite3.Connection) -> dict[str, dict[str, str]]:
-    labels: dict[str, dict[str, str]] = {}
+def role_info(conn: sqlite3.Connection) -> dict[str, dict[str, dict]]:
+    """Role metadata per game type: label plus precedence (0 = normal)."""
+    info: dict[str, dict[str, dict]] = {}
     for row in conn.execute("SELECT id, roles FROM game_types"):
         try:
             roles = json.loads(row["roles"])
         except json.JSONDecodeError:
             roles = []
-        labels[row["id"]] = {r.get("id"): r.get("label", r.get("id", "")) for r in roles}
-    return labels
+        info[row["id"]] = {
+            role.get("id"): {
+                "label": role.get("label", role.get("id", "")),
+                "precedence": int(role.get("precedence", 0) or 0),
+            }
+            for role in roles
+        }
+    return info
+
+
+def _precedence_multiplier(precedence: int) -> float:
+    """Errata (precedence 100) gets a 2x relevance boost, capped at 3x."""
+    return 1.0 + min(max(precedence, 0), 200) / 100.0
 
 
 def build_match_query(query: str) -> str:
@@ -143,7 +155,9 @@ def _highlight_window(text: str, query: str, radius: int = 280) -> str:
     return prefix + "".join(out) + suffix
 
 
-def _row_to_result(row: sqlite3.Row, snippet: str, score: float, labels: dict) -> dict:
+def _row_to_result(row: sqlite3.Row, snippet: str, score: float, roles: dict) -> dict:
+    meta = roles.get(row["game_type"], {}).get(row["role"], {})
+    precedence = int(meta.get("precedence", 0) or 0)
     return {
         "chunk_id": row["id"],
         "text": row["text"],
@@ -155,9 +169,9 @@ def _row_to_result(row: sqlite3.Row, snippet: str, score: float, labels: dict) -
             "id": row["document_id"],
             "title": row["document_title"],
             "role": row["role"],
-            "role_label": labels.get(row["game_type"], {}).get(
-                row["role"], row["role"].replace("_", " ").title()
-            ),
+            "role_label": meta.get("label", row["role"].replace("_", " ").title()),
+            "precedence": precedence,
+            "overrides": precedence > 0,
         },
         "game": {
             "id": row["game_id"],
@@ -172,13 +186,14 @@ def search_keyword(
     query: str,
     filters: SearchFilters,
     limit: int = 25,
-    labels: dict | None = None,
+    roles: dict | None = None,
 ) -> list[dict]:
     match = build_match_query(query)
     if not match:
         return []
-    labels = labels if labels is not None else role_labels(conn)
+    roles = roles if roles is not None else role_info(conn)
     clauses, params = filters.conditions("c")
+    scan_limit = min(max(limit * 4, limit), 200)
 
     for expression in (match, match.replace(" AND ", " OR ")):
         sql = f"""
@@ -197,14 +212,20 @@ def search_keyword(
             ORDER BY rank
             LIMIT ?
         """
-        rows = conn.execute(sql, [expression, *params, limit]).fetchall()
+        rows = conn.execute(sql, [expression, *params, scan_limit]).fetchall()
         if rows:
-            return [
+            results = [
                 _row_to_result(
-                    row, _render_fts_snippet(row["snip"]), float(-row["rank"]), labels
+                    row, _render_fts_snippet(row["snip"]), float(-row["rank"]), roles
                 )
                 for row in rows
             ]
+            for result in results:
+                result["score"] *= _precedence_multiplier(
+                    result["document"]["precedence"]
+                )
+            results.sort(key=lambda item: item["score"], reverse=True)
+            return results[:limit]
     return []
 
 
@@ -215,9 +236,9 @@ def search_semantic(
     query: str,
     filters: SearchFilters,
     limit: int = 25,
-    labels: dict | None = None,
+    roles: dict | None = None,
 ) -> list[dict]:
-    labels = labels if labels is not None else role_labels(conn)
+    roles = roles if roles is not None else role_info(conn)
     clauses, params = filters.conditions("c")
     sql = f"""
         SELECT c.id, c.text, c.page_start, c.page_end, c.document_id, c.game_id,
@@ -248,21 +269,25 @@ def search_semantic(
     norms[norms == 0] = 1.0
     scores = (matrix @ query_vector) / (norms * query_norm)
 
-    order = np.argsort(scores)[::-1][:limit]
+    order = np.argsort(scores)[::-1][: max(limit * 2, limit)]
     # Embedding scores are anisotropic: unrelated text still sits around 0.4.
     # Keep the neighbourhood of the best hit instead of returning the whole book.
     if len(order):
         cutoff = float(scores[order[0]]) - 0.15
-        order = np.array([index for index in order if scores[index] >= cutoff])
-    return [
-        _row_to_result(
+        order = [index for index in order if scores[index] >= cutoff]
+
+    ranked: list[dict] = []
+    for index in order:
+        result = _row_to_result(
             rows[index],
             _highlight_window(rows[index]["text"], query),
             float(scores[index]),
-            labels,
+            roles,
         )
-        for index in order
-    ]
+        result["score"] *= _precedence_multiplier(result["document"]["precedence"])
+        ranked.append(result)
+    ranked.sort(key=lambda item: item["score"], reverse=True)
+    return ranked[:limit]
 
 
 def rrf_merge(*ranked_lists: list[dict], limit: int) -> list[dict]:
@@ -272,7 +297,8 @@ def rrf_merge(*ranked_lists: list[dict], limit: int) -> list[dict]:
         for position, item in enumerate(ranked):
             chunk_id = item["chunk_id"]
             combined.setdefault(chunk_id, item)
-            scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (RRF_K + position + 1)
+            weight = 1.6 if item["document"].get("overrides") else 1.0
+            scores[chunk_id] = scores.get(chunk_id, 0.0) + weight / (RRF_K + position + 1)
     ordered = sorted(combined.values(), key=lambda item: scores[item["chunk_id"]], reverse=True)
     for item in ordered:
         item["score"] = round(scores[item["chunk_id"]], 6)
@@ -290,12 +316,12 @@ def search(
 ) -> tuple[list[dict], str, str | None]:
     """Return (results, mode_used, note)."""
     filters = filters or SearchFilters()
-    labels = role_labels(conn)
+    roles = role_info(conn)
     mode = mode if mode in {"keyword", "semantic", "hybrid"} else "hybrid"
     pool = max(limit * 4, 40)
 
     if mode == "keyword":
-        return search_keyword(conn, query, filters, limit, labels), "keyword", None
+        return search_keyword(conn, query, filters, limit, roles), "keyword", None
 
     if mode == "semantic":
         if not embedding:
@@ -304,18 +330,18 @@ def search(
                 409,
             )
         provider, model = embedding
-        results = search_semantic(conn, provider, model, query, filters, limit, labels)
+        results = search_semantic(conn, provider, model, query, filters, limit, roles)
         return results, "semantic", None
 
     # Hybrid: keyword always works, semantic is a bonus.
-    keyword_hits = search_keyword(conn, query, filters, pool, labels)
+    keyword_hits = search_keyword(conn, query, filters, pool, roles)
     if not embedding:
         return keyword_hits[:limit], "keyword", (
             "Semantic search is off (no embedding provider), showing keyword results."
         )
     provider, model = embedding
     try:
-        semantic_hits = search_semantic(conn, provider, model, query, filters, pool, labels)
+        semantic_hits = search_semantic(conn, provider, model, query, filters, pool, roles)
     except ProviderError as exc:
         return keyword_hits[:limit], "keyword", f"Semantic search unavailable: {exc.message}"
     if not semantic_hits:

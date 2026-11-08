@@ -29,6 +29,9 @@ def _citation_label(result: dict) -> str:
     role = result["document"].get("role_label") or ""
     page = result.get("page_start")
     parts = [game, document]
+    label_prefix = ""
+    if result["document"].get("overrides"):
+        label_prefix = "ERRATA (overrides core rules) — "
     if role:
         parts.append(role)
     label = " — ".join(parts)
@@ -37,7 +40,7 @@ def _citation_label(result: dict) -> str:
             label += f", pp. {page}–{result['page_end']}"
         else:
             label += f", p. {page}"
-    return label
+    return label_prefix + label
 
 
 def build_context(results: Sequence[dict]) -> tuple[str, list[dict]]:
@@ -104,7 +107,12 @@ def references_markdown(results: Sequence[dict], refs: Sequence[int] | None = No
     if not selected:
         return ""
 
-    lines = ["", "---", "", "#### References", ""]
+    lines = ["", "", "---", "", "#### References", ""]
+    if any(result["document"].get("overrides") for _, result in selected):
+        lines.append(
+            "> **Errata takes precedence** over the core rules where they conflict."
+        )
+        lines.append("")
     for number, result in selected:
         document = result["document"]
         game = result["game"]
@@ -121,8 +129,9 @@ def references_markdown(results: Sequence[dict], refs: Sequence[int] | None = No
         if page:
             url += f"#page={page}"
 
+        marker = "**ERRATA** " if document.get("overrides") else ""
         line = (
-            f"{number}. [{_escape_markdown(document['title'])}{location}]({url})"
+            f"{number}. {marker}[{_escape_markdown(document['title'])}{location}]({url})"
             f" — *{_escape_markdown(game['title'])}*"
         )
         role = document.get("role_label")

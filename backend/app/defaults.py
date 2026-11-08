@@ -20,10 +20,11 @@ GAME_TYPES = [
         "label": "Roleplaying game",
         "description": "Core book, supplements and campaigns.",
         "roles": [
-            {"id": "core", "label": "Core rules"},
-            {"id": "expansion", "label": "Supplement / bestiary"},
-            {"id": "campaign", "label": "Campaign"},
-            {"id": "other", "label": "Other"},
+            {"id": "core", "label": "Core rules", "precedence": 0},
+            {"id": "errata", "label": "Errata / corrections", "precedence": 100},
+            {"id": "expansion", "label": "Supplement / bestiary", "precedence": 0},
+            {"id": "campaign", "label": "Campaign", "precedence": 0},
+            {"id": "other", "label": "Other", "precedence": 0},
         ],
         "sort_order": 10,
     },
@@ -32,10 +33,11 @@ GAME_TYPES = [
         "label": "Board game",
         "description": "Base game, expansions and scenario books.",
         "roles": [
-            {"id": "core", "label": "Core rules"},
-            {"id": "expansion", "label": "Expansion"},
-            {"id": "campaign", "label": "Campaign / scenario book"},
-            {"id": "other", "label": "Other"},
+            {"id": "core", "label": "Core rules", "precedence": 0},
+            {"id": "errata", "label": "Errata / corrections", "precedence": 100},
+            {"id": "expansion", "label": "Expansion", "precedence": 0},
+            {"id": "campaign", "label": "Campaign / scenario book", "precedence": 0},
+            {"id": "other", "label": "Other", "precedence": 0},
         ],
         "sort_order": 20,
     },
@@ -44,10 +46,11 @@ GAME_TYPES = [
         "label": "Wargame",
         "description": "Rulebook, army books and campaign supplements.",
         "roles": [
-            {"id": "core", "label": "Core rulebook"},
-            {"id": "expansion", "label": "Army book / supplement"},
-            {"id": "campaign", "label": "Campaign"},
-            {"id": "other", "label": "Other"},
+            {"id": "core", "label": "Core rulebook", "precedence": 0},
+            {"id": "errata", "label": "Errata / corrections", "precedence": 100},
+            {"id": "expansion", "label": "Army book / supplement", "precedence": 0},
+            {"id": "campaign", "label": "Campaign", "precedence": 0},
+            {"id": "other", "label": "Other", "precedence": 0},
         ],
         "sort_order": 30,
     },
@@ -121,6 +124,8 @@ DEFAULT_SYSTEM_PROMPT = (
     "after each claim, for example [3]. Quote exact dice, distances and costs. "
     "If the excerpts do not contain the answer, say so plainly and suggest a "
     "better search phrase; never invent rules, page numbers or book names. "
-    "Do not write a references or sources list yourself: the application appends "
-    "one with document titles, page numbers and links."
+    "Some excerpts are marked ERRATA. Errata corrects and takes precedence over "
+    "the core rules: when they conflict, apply the errata and say explicitly that "
+    "it supersedes the core rule. Do not write a references or sources list "
+    "yourself: the application appends one with document titles, page numbers and links."
 )

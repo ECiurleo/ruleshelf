@@ -16,6 +16,9 @@ docker compose up -d      # then open http://localhost:8080
   supplements/expansions (bestiaries, army books) and campaigns (separate from the rules).
 - **Uploads stay yours.** PDFs, EPUB, DOCX, Markdown, text and HTML are stored on disk and indexed
   into a local SQLite database. Nothing leaves your machine unless you call an AI provider.
+- **Errata wins.** File official corrections under **Errata**: they are boosted above the core rules
+  in every search mode, flagged with an "overrides core rules" badge, and the AI is instructed to
+  treat them as superseding where the texts conflict. Every answer says when errata took precedence.
 - **Three search modes.**
   - *Keyword* — SQLite FTS5, exact words, names and table entries.
   - *Meaning* — vector search over your embedding model.
@@ -96,6 +99,7 @@ After choosing an embedding model for an existing library, run **Build embedding
 | --- | --- |
 | Game | *Warhammer Fantasy Roleplay 4e* — type: RPG |
 | └ Core rules | *Warhammer Fantasy Core Rules* — the primary source |
+| └ Errata | *Core Rules Errata v1.2* — corrections that override the core rules |
 | └ Supplements | *The Imperial Zoo*, *Altdorf: Crown of the Empire* |
 | └ Campaigns | *The Enemy Within* |
 | Game | *Warhammer: The Old World* — type: Wargame |
@@ -103,13 +107,17 @@ After choosing an embedding model for an existing library, run **Build embedding
 | └ Army books | *Arcane Journal: Kingdom of Bretonnia* |
 
 Roles are per game type and can be changed (or new types added) in **Settings → Game types**.
+A role can carry a `precedence` value; errata ships with `100`, which boosts it above normal rules
+and marks its results as overriding.
 
 ![A game shelf with core rules, supplements and a campaign](docs/screenshots/game.png)
 
 ## Search tips
 
 - `"exact phrase"` searches a phrase; other words are AND-ed and the last word is prefix-matched.
-- Filter by role (core / supplements / campaigns) to keep campaign spoilers out of rules answers.
+- Filter by role (core / errata / supplements / campaigns) to keep campaign spoilers out of rules answers.
+- Errata is prioritised over the core rules automatically; add precedence to any custom role in
+  **Settings → Game types** if your game uses a different source of corrections.
 - *Meaning* search finds “wizard spell goes wrong” even when the book says “miscast”.
 - The reader shows the indexed page; the **Original** button opens the PDF at that page.
 

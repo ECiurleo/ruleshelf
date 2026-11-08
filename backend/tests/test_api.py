@@ -201,6 +201,59 @@ def test_references_include_document_page_and_link():
     assert "2. [Zoo" in cited
 
 
+def test_game_types_expose_errata_precedence(client):
+    types = {item["id"]: item for item in client.get("/api/game-types").json()["game_types"]}
+    for game_type in ("rpg", "boardgame", "wargame"):
+        roles = {role["id"]: role for role in types[game_type]["roles"]}
+        assert "errata" in roles
+        assert roles["errata"]["precedence"] == 100
+        assert roles["core"]["precedence"] == 0
+
+
+def test_errata_outranks_identical_core_text(client, game):
+    core = upload_document(client, game["id"], role="core", title="Core Rules")
+    errata = upload_document(client, game["id"], role="errata", title="Official Errata")
+    wait_until_ready(client, core["id"])
+    wait_until_ready(client, errata["id"])
+
+    response = client.get(
+        "/api/search", params={"q": "charge reaction", "mode": "keyword"}
+    ).json()
+    assert response["count"] == 2
+    first = response["results"][0]
+    assert first["document"]["role"] == "errata"
+    assert first["document"]["overrides"] is True
+    assert first["document"]["precedence"] == 100
+    assert first["document"]["role_label"] == "Errata / corrections"
+    assert response["results"][1]["document"]["overrides"] is False
+
+
+def test_rag_marks_errata_as_overriding():
+    from app.services.rag import build_context, references_markdown
+
+    results = [
+        {
+            "document": {
+                "id": "errata1",
+                "title": "Official Errata",
+                "role_label": "Errata / corrections",
+                "overrides": True,
+                "precedence": 100,
+            },
+            "game": {"title": "WFRP"},
+            "page_start": 3,
+            "page_end": 3,
+            "text": "Charge reactions now allow Stand and Shoot.",
+        }
+    ]
+    context, used = build_context(results)
+    assert "ERRATA (overrides core rules)" in context
+    markdown = references_markdown(used)
+    assert "Errata takes precedence" in markdown
+    assert "**ERRATA**" in markdown
+    assert "/api/documents/errata1/file#page=3" in markdown
+
+
 def test_unsupported_upload_rejected(client, game):
     response = client.post(
         "/api/documents",

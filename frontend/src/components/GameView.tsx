@@ -39,6 +39,7 @@ export function GameView({
   const processing = documents.filter(
     (doc) => doc.status === "pending" || doc.status === "processing",
   ).length;
+  const errataCount = documents.filter((doc) => doc.role === "errata").length;
 
   return (
     <div className="view game-view">
@@ -51,6 +52,14 @@ export function GameView({
             <span>{plural(documents.length, "document")}</span>
             <span className="dot-sep" />
             <span>{game.chunk_count.toLocaleString()} indexed chunks</span>
+            {errataCount > 0 && (
+              <>
+                <span className="dot-sep" />
+                <span className="errata-note">
+                  Errata applied · takes precedence over core rules
+                </span>
+              </>
+            )}
             {processing > 0 && (
               <>
                 <span className="dot-sep" />
