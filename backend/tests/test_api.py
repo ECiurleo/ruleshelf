@@ -470,10 +470,97 @@ def test_answer_prompt_reasons_about_step_order():
         messages, _used = build_messages(conn, "Can this happen during setup?", [])
 
     prompt = messages[-1]["content"]
-    assert "Timing comes first" in prompt
-    assert "cannot be used during that step" in prompt
-    assert "say the order is unclear" in prompt
-    assert "answer every part of a multi-part question" in prompt
+    assert "Answer in this order." in prompt
+    assert "Order:" in prompt
+    assert "Unclear or Not stated" in prompt
+    assert "for each part" in prompt
+    assert "Separate baseline from exception" in prompt
+    assert "available only from the step that introduces it onward" in prompt
+    assert "only with numbers from this list" in prompt
+    assert "Do not print" in prompt
+
+
+def test_system_prompt_removes_legacy_lead_with_answer(client):
+    from app.db import db, get_setting, set_setting
+    from app.services.rag import system_prompt
+
+    with db() as conn:
+        previous = get_setting(conn, "system_prompt")
+        set_setting(
+            conn,
+            "system_prompt",
+            "Custom referee. Put the direct answer in the first sentence. Keep this.",
+        )
+        cleaned = system_prompt(conn)
+    if previous is not None:
+        with db() as conn:
+            set_setting(conn, "system_prompt", previous)
+
+    assert "Put the direct answer" not in cleaned
+    assert "Keep this." in cleaned
+    assert "takes precedence over any instruction to lead with the answer" in cleaned
+
+
+def test_official_prompt_ignores_forum_results():
+    from app.db import db
+    from app.services.rag import build_messages
+
+    forum = {
+        "source_type": "bgg",
+        "url": "https://boardgamegeek.com/thread/123/question",
+        "document": {"id": "", "title": "Forum thread", "role_label": "BGG forum"},
+        "game": {"title": "A Game"},
+        "page_start": None,
+        "page_end": None,
+        "text": "Forum opinion.",
+    }
+    with db() as conn:
+        messages, used = build_messages(conn, "Question?", [forum])
+
+    assert used == []
+    prompt = messages[-1]["content"]
+    assert "(No excerpts were retrieved" in prompt
+    assert "BGG FORUM" not in prompt
+
+
+def test_community_prompt_excludes_official_history():
+    from app.db import db
+    from app.services.rag import build_community_messages
+
+    forum = {
+        "source_type": "bgg",
+        "url": "https://boardgamegeek.com/thread/123/question",
+        "document": {"id": "", "title": "Forum thread", "role_label": "BGG forum"},
+        "game": {"title": "A Game"},
+        "page_start": None,
+        "page_end": None,
+        "text": "Two of three posters agree on the timing.",
+    }
+    history = [
+        {"role": "user", "content": "First question"},
+        {"role": "assistant", "content": "Official answer with [3]"},
+        {"role": "user", "content": "Follow-up question"},
+    ]
+    with db() as conn:
+        messages, _used = build_community_messages(
+            conn, "Follow-up question", [forum], history=history
+        )
+
+    history_messages = messages[1:-1]
+    assert [message["role"] for message in history_messages] == ["user", "user"]
+    assert all("Official answer" not in message["content"] for message in history_messages)
+    prompt = messages[-1]["content"]
+    assert "which you cannot see" in prompt
+    assert "how many posts support it" in prompt
+    assert "Do not use earlier turns as sources" in prompt
+
+
+def test_rewrite_prompt_requests_sequence_sections():
+    from app.services.rag import REWRITE_SYSTEM
+
+    assert "sequence section" in REWRITE_SYSTEM
+    assert "setup steps" in REWRITE_SYSTEM
+    assert "order of play" in REWRITE_SYSTEM
 
 
 def test_rag_marks_errata_as_overriding():
@@ -495,7 +582,7 @@ def test_rag_marks_errata_as_overriding():
         }
     ]
     context, used = build_context(results)
-    assert "ERRATA (overrides core rules)" in context
+    assert "ERRATA (official correction)" in context
     markdown = references_markdown(used)
     assert "Errata takes precedence" in markdown
     assert "**ERRATA**" in markdown
@@ -598,7 +685,7 @@ def test_community_answer_uses_global_reference_numbers():
     prompt = messages[-1]["content"]
     assert "[4] BGG FORUM (unofficial)" in prompt
     assert "unofficial BoardGameGeek forum posts" in prompt
-    assert "do not repeat the rulebook answer" in prompt
+    assert "which you cannot see" in prompt
 
 
 def test_unsupported_upload_rejected(client, game):

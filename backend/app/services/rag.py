@@ -17,8 +17,12 @@ MAX_CHUNK_CHARS = 2_200
 
 REWRITE_SYSTEM = (
     "You convert tabletop rules questions into concise keyword searches for a "
-    "rulebook index. Return 1 to 3 lines. Each line must be 2 to 4 words, using "
-    "likely rule, section or table names. No numbering, quotes or explanation."
+    "rulebook index. Return 1 to 3 lines of 2 to 4 words, using likely rule, "
+    "section or table names and the game's own nouns from the question. If the "
+    "question asks whether something can happen at a point in play (setup, a "
+    "phase, a turn, a trigger), make one line the name of that sequence section, "
+    "such as \"setup steps\", \"turn sequence\" or \"order of play\". No "
+    "numbering, quotes or explanation."
 )
 
 
@@ -67,24 +71,36 @@ def _escape_markdown(text: str) -> str:
     return _MD_SPECIAL.sub(r"\\\1", text)
 
 
-TIMING_SYSTEM = (
-    "Establish timing before applying a rule: identify the phase, step or trigger, "
-    "what has already happened by then, and whether the card or effect exists at "
-    "that point. Setup steps and round phases resolve in printed order; something "
-    "introduced after a step cannot be used during it. Respect when, after, before "
-    "and Response wording. Read 'then', 'after', 'before', 'finally', 'once' and "
-    "'when' as strict ordering words. If the excerpts do not fix the order, say so "
-    "instead of inventing one."
+ORDER_SYSTEM = (
+    "Order of play matters. Before applying any rule, check what has already "
+    "happened, and what exists, at the point the question is about. Each question "
+    "comes with an Order and Answer format; follow it, and it takes precedence over "
+    "any instruction to lead with the answer. Cite [n] only from the current "
+    "excerpt list; never invent rules, page numbers or book names."
 )
+
+COMMUNITY_SYSTEM = (
+    "You summarise unofficial tabletop forum posts for a reader. Use only the "
+    "numbered posts, never present forum opinion as an official rule, and never "
+    "invent posts, rules, page numbers or links."
+)
+
+_LEGACY_LEAD = re.compile(r"Put the direct answer in the first sentence\.\s*", re.IGNORECASE)
+_LEGACY_FORMULA = re.compile(
+    r"\s*\(for example Walk = Movement x 2, Run = Movement x 4\)", re.IGNORECASE
+)
+_ORDER_MARKER = "takes precedence over any instruction to lead with the answer"
 
 
 def system_prompt(conn: sqlite3.Connection) -> str:
     prompt = get_setting(conn, "system_prompt", DEFAULT_SYSTEM_PROMPT) or DEFAULT_SYSTEM_PROMPT
-    # Existing installs keep their stored prompt, so attach the timing rule here
-    # unless the prompt already carries it.
-    if "establish timing before applying a rule" in prompt.lower():
-        return prompt
-    return f"{prompt}\n\n{TIMING_SYSTEM}"
+    # Existing installs keep their stored prompt, and older ones still say
+    # "answer first". Remove that conflict and append the order pointer.
+    prompt = _LEGACY_LEAD.sub("", prompt)
+    prompt = _LEGACY_FORMULA.sub("", prompt).strip()
+    if _ORDER_MARKER not in prompt.lower():
+        prompt = f"{prompt}\n\n{ORDER_SYSTEM}"
+    return prompt
 
 
 def _citation_label(result: dict) -> str:
@@ -97,7 +113,7 @@ def _citation_label(result: dict) -> str:
     parts = [game, document]
     label_prefix = ""
     if result["document"].get("overrides"):
-        label_prefix = "ERRATA (overrides core rules) — "
+        label_prefix = "ERRATA (official correction) — "
     if role:
         parts.append(role)
     label = " — ".join(parts)
@@ -153,47 +169,76 @@ def build_messages(
     results: Sequence[dict],
     history: Sequence[dict] | None = None,
 ) -> tuple[list[dict], list[dict]]:
-    context, used = build_context(results)
+    # BGG threads are answered separately; never let them enter the official
+    # context or consume its excerpt budget.
+    rule_results = [result for result in results if result.get("source_type") != "bgg"]
+    context, used = build_context(rule_results)
     if not context:
         context = "(No excerpts were retrieved from the library.)"
 
-    errata = any(result["document"].get("overrides") for result in results)
+    errata = any(result["document"].get("overrides") for result in rule_results)
     priority = (
-        "IMPORTANT: excerpts marked ERRATA are official corrections that supersede "
-        "conflicting core rules. Use the errata text as the current rule.\n\n"
+        "Excerpts marked ERRATA are official corrections. Each replaces only the "
+        "text it corrects, within any scope it names (a mission, card, edition). "
+        "Apply it on top of the core rule and keep the rest of that rule. If errata "
+        "entries conflict, say so.\n\n"
         if errata
         else ""
     )
     prompt = (
-        f"{priority}The numbered excerpts below come from the user's rulebooks and, "
-        "when enabled, from BoardGameGeek forum threads.\n\n"
+        f"{priority}Numbered excerpts from the user's rulebooks:\n\n"
         f"{context}\n\n"
         f"Question: {query}\n\n"
-        "Timing comes first. Before applying a rule, identify the phase, step or "
-        "trigger the question depends on and what has already happened at that "
-        "point. Setup steps and round phases resolve in the order the rules print "
-        "them, so a card or effect introduced after a step cannot be used during "
-        "that step. Read sequence words literally: 'then', 'after', 'before', "
-        "'finally', 'once' and 'when' fix the order of steps and effects; never "
-        "reorder or compress them. Respect 'Response' wording, and resolve any "
-        "ordering the excerpts give. When timing decides the answer, "
-        "state it in one short sentence before the ruling, for example: 'The path "
-        "deck is built at step 7 and arrival setup is step 8, so a card added after "
-        "arrival setup is not in the deck during setup.' If the excerpts do not fix "
-        "the order, say the order is unclear instead of inventing one.\n\n"
-        "Then answer directly: start with yes or no when the question asks whether "
-        "something can happen, and answer every part of a multi-part question. Give "
-        "the rule, exact dice, distances and costs, and do any arithmetic the "
-        "excerpts support (for example Walk = Movement x 2). When the excerpts "
-        "contain comparable entries (other species, weapons, and so on), state the "
-        "comparison explicitly with their values.\n\n"
-        "Use only these excerpts, citing the excerpt number in square brackets after "
-        "every rule statement. Rulebook excerpts are authoritative. Excerpts labeled "
-        "BGG FORUM are unofficial community posts: label any claim taken from them "
-        "as forum opinion and never let them override a rulebook excerpt. If the "
-        "rulebook answers the question, use it and ignore conflicting forum "
-        "snippets. Do not call the rules silent when their sequence settles the "
-        "question. If the excerpts truly do not answer it, say what is missing."
+        "Answer in this order.\n\n"
+        "1. Parts. Split the question into its parts (for example: can it happen, "
+        "when, what follows). Answer each part on its own. A \"no\" to an earlier "
+        "part does not settle a later one: say the later part does not arise at that "
+        "point, then give what the excerpts state for when it does.\n\n"
+        "2. Order. If the question depends on setup, a phase, a turn, initiative, a "
+        "combat step, a trigger or any timing window, write \"Order:\" and one to "
+        "three lines. Each line must quote the clause that fixes the order, keeping "
+        "its sequence words (before, after, then, finally, once, when), and cite the "
+        "excerpt. Never drop a sequence word or compress several steps into one. "
+        "Then state the sequence in plain order. A card, token or effect is "
+        "available only from the step that introduces it onward: if an excerpt says "
+        "it is shuffled in, put into play or attached after step X, it is absent "
+        "during step X and every earlier step. Do not say it can exist earlier unless "
+        "an excerpt explicitly says so. Separate baseline from exception: use the "
+        "general setup or phase list as the baseline, and if an excerpt gives a "
+        "mission-, card- or scenario-specific instruction, label it and say exactly "
+        "where it is inserted; never splice it into the baseline as if it were part "
+        "of the normal sequence. When in doubt about whether timing matters, include "
+        "Order: it is safer to state the sequence than to skip it.\n\n"
+        "3. Answer. Begin with Yes, No, Unclear or Not stated for each part (label "
+        "them (a), (b) when there is more than one), then the reason. For a "
+        "\"can I do X during Y\" question, say whether X exists in the baseline at "
+        "Y; a later specific insertion does not make it exist earlier. Keep the whole "
+        "answer to roughly 3 to 8 sentences. Do not print \"1. Parts\", "
+        "\"2. Order\" or \"3. Answer\" as headings; write \"Order:\" once, then "
+        "the verdict paragraph.\n"
+        "No: the rules or their order rule it out. This is a complete answer. Name "
+        "the blocking step or condition.\n"
+        "Unclear: both steps appear but their order is not given. Name them.\n"
+        "Not stated: nothing relevant is in the excerpts. After everything the "
+        "excerpts do show, say in one sentence what is missing.\n"
+        "Do not open with \"the excerpts do not establish\" when order settles the "
+        "question.\n\n"
+        "Wording, as the excerpts use it: then, after and finally put a step later; "
+        "before puts it earlier, and an effect worded \"before X\" is unusable once "
+        "X has started; when, whenever and once name a trigger (\"once\" can also "
+        "mean a limit); Response and similar windows open only after their named "
+        "trigger and only for effects available then; instead, would, prevent and "
+        "skip change an event before it happens, so check what depends on the "
+        "original event. For nested or simultaneous triggers use the order the "
+        "excerpts give; if none is given, say so rather than assuming one. A "
+        "numbered or explicitly sequenced list fixes order; a passing mention does "
+        "not.\n\n"
+        "Sources. Use only the excerpts that bear on the question and ignore the "
+        "rest. Cite [n] after every rule statement, only with numbers from this list "
+        "(numbers in earlier turns referred to other lists), and cite the excerpt "
+        "that states the point, not one that merely shares a term. Do the arithmetic "
+        "the excerpts support and show the numbers; when they list comparable "
+        "entries, compare them with their values. Keep to roughly 3 to 8 sentences."
     )
 
     messages: list[dict] = [{"role": "system", "content": system_prompt(conn)}]
@@ -213,10 +258,11 @@ def build_community_messages(
     history: Sequence[dict] | None = None,
     start_ref: int = 1,
 ) -> tuple[list[dict], list[dict]]:
-    """Prompt for a second, clearly unofficial answer drawn from BGG threads.
+    """Prompt for the separate, clearly unofficial answer from BGG threads.
 
     ``start_ref`` keeps citation numbers aligned with the combined source list
-    shown under the answer, so ``[n]`` opens the right thread card.
+    shown under the answer. Official answers are deliberately excluded from the
+    history so they cannot leak into this call.
     """
     context, used = build_context(results, start_ref=start_ref)
     if not context:
@@ -224,24 +270,35 @@ def build_community_messages(
 
     prompt = (
         "The numbered excerpts below are unofficial BoardGameGeek forum posts, "
-        "not rules text. They are being shown to the reader as a separate "
-        "community answer underneath the official rulebook answer.\n\n"
+        "not rules text. They appear under the official answer as a separate "
+        "community answer, which you cannot see.\n\n"
         f"{context}\n\n"
         f"Question: {query}\n\n"
-        "Answer using only these forum posts. Start with the community consensus, "
-        "then note meaningful disagreement or common house rules, and say when a "
-        "post's answer depends on a particular step or timing. Cite the excerpt "
-        "number in square brackets after each claim. Never present forum opinion as "
-        "an official rule, and do not repeat the rulebook answer. If the posts do "
-        "not answer the question, say so briefly."
+        "Report what the posters say, using only these posts.\n"
+        "- Start with the majority view and how many posts support it (for example "
+        "\"2 of 4 posts\"). If there is no majority, say the posts differ.\n"
+        "- Then give meaningful disagreement and any house rules, labelled as house "
+        "rules.\n"
+        "- Where an answer depends on a step, phase or timing, give the order the "
+        "poster describes. Do not work out the order yourself.\n"
+        "- When a post quotes or paraphrases a rule, say the poster is quoting it. "
+        "Never write \"the rules say\" or present anything as official.\n"
+        "- Cite [n] after each claim, only with numbers from this list, using the "
+        "post that makes the claim.\n"
+        "- Do not use earlier turns as sources. If the posts do not answer the "
+        "question, say so in one sentence."
     )
 
-    messages: list[dict] = [{"role": "system", "content": system_prompt(conn)}]
-    for turn in (history or [])[-4:]:
-        role = turn.get("role")
-        content = (turn.get("content") or "").strip()
-        if role in {"user", "assistant"} and content:
-            messages.append({"role": role, "content": content[:3000]})
+    messages: list[dict] = [{"role": "system", "content": COMMUNITY_SYSTEM}]
+    user_turns = [
+        turn
+        for turn in (history or [])
+        if turn.get("role") == "user" and (turn.get("content") or "").strip()
+    ][-4:]
+    for turn in user_turns:
+        messages.append(
+            {"role": "user", "content": turn["content"].strip()[:3000]}
+        )
     messages.append({"role": "user", "content": prompt})
     return messages, used
 
