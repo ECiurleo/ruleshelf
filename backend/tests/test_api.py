@@ -166,6 +166,21 @@ def test_ask_requires_provider(client, game):
     assert "provider" in response.json()["detail"].lower()
 
 
+def test_thumbnail_is_generated_and_removed(client, game):
+    document = upload_document(client, game["id"])
+    ready = wait_until_ready(client, document["id"])
+    assert ready["thumbnail_url"].startswith(f"/api/documents/{document['id']}/thumbnail")
+
+    response = client.get(ready["thumbnail_url"])
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert response.content[:2] == b"\xff\xd8"
+    assert len(response.content) > 500
+
+    assert client.delete(f"/api/documents/{document['id']}").status_code == 200
+    assert client.get(f"/api/documents/{document['id']}/thumbnail").status_code == 404
+
+
 def test_references_include_document_page_and_link():
     from app.services.rag import references_markdown
 

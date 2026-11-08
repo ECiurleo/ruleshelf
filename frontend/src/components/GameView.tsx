@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { plural, type Document, type Game, type GameType } from "../lib/api";
 import { Icon } from "./Icon";
 import { DocumentCard } from "./DocumentCard";
+import { DocumentCoverCard } from "./DocumentCoverCard";
 
 export function GameView({
   game,
@@ -27,6 +29,15 @@ export function GameView({
   onDeleteDoc: (doc: Document) => void;
   onRetitleDoc: (doc: Document, title: string) => void;
 }) {
+  const [view, setView] = useState<"grid" | "list">(() => {
+    const saved = localStorage.getItem("ruleshelf:docView");
+    return saved === "grid" ? "grid" : "list";
+  });
+  const chooseView = (next: "grid" | "list") => {
+    setView(next);
+    localStorage.setItem("ruleshelf:docView", next);
+  };
+
   const roles = gameType?.roles ?? [{ id: "core", label: "Core rules" }];
   const known = new Set(roles.map((role) => role.id));
   const extraRoles = [...new Set(documents.map((doc) => doc.role))].filter(
@@ -71,6 +82,24 @@ export function GameView({
           </div>
         </div>
         <div className="game-actions">
+          <div className="view-switch" role="group" aria-label="Document layout">
+            <button
+              className={view === "grid" ? "selected" : ""}
+              onClick={() => chooseView("grid")}
+              title="Cover view"
+              aria-label="Cover view"
+            >
+              <Icon name="grid" size={16} />
+            </button>
+            <button
+              className={view === "list" ? "selected" : ""}
+              onClick={() => chooseView("list")}
+              title="List view"
+              aria-label="List view"
+            >
+              <Icon name="list" size={16} />
+            </button>
+          </div>
           <button className="button primary" onClick={() => onUpload("core")}>
             <Icon name="upload" size={17} /> Add document
           </button>
@@ -123,18 +152,29 @@ export function GameView({
                   </div>
                 </div>
                 {docs.length ? (
-                  <div className="document-list">
-                    {docs.map((doc) => (
-                      <DocumentCard
-                        key={doc.id}
-                        document={doc}
-                        embeddingConfigured={embeddingConfigured}
-                        onOpen={() => onOpenDoc(doc)}
-                        onReindex={() => onReindexDoc(doc)}
-                        onDelete={() => onDeleteDoc(doc)}
-                        onRetitle={(title) => onRetitleDoc(doc, title)}
-                      />
-                    ))}
+                  <div className={view === "grid" ? "document-grid" : "document-list"}>
+                    {docs.map((doc) =>
+                      view === "grid" ? (
+                        <DocumentCoverCard
+                          key={doc.id}
+                          document={doc}
+                          onOpen={() => onOpenDoc(doc)}
+                          onReindex={() => onReindexDoc(doc)}
+                          onDelete={() => onDeleteDoc(doc)}
+                          onRetitle={(title) => onRetitleDoc(doc, title)}
+                        />
+                      ) : (
+                        <DocumentCard
+                          key={doc.id}
+                          document={doc}
+                          embeddingConfigured={embeddingConfigured}
+                          onOpen={() => onOpenDoc(doc)}
+                          onReindex={() => onReindexDoc(doc)}
+                          onDelete={() => onDeleteDoc(doc)}
+                          onRetitle={(title) => onRetitleDoc(doc, title)}
+                        />
+                      ),
+                    )}
                   </div>
                 ) : (
                   <button className="dropzone small" onClick={() => onUpload(role.id)}>

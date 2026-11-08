@@ -28,6 +28,8 @@ docker compose up -d      # then open http://localhost:8080
   inline `[n]` citation is clickable straight into the in-app reader.
 - **Reader built in.** Open any result in a drawer, read the page, jump to the original PDF at that
   page, or download the file.
+- **Cover view.** Generated thumbnails from PDF/EPUB covers (and typographic cards for other
+  formats) in a cover grid with actions overlaid on each book, or a compact list with small covers.
 - **Bring your own model.** Built-in support for **Ollama** (free/local), **OpenAI/ChatGPT**,
   **Anthropic Claude**, **DeepSeek** and **Qwen/DashScope**, plus any OpenAI-compatible endpoint
   (OpenRouter, LM Studio, vLLM, LiteLLM, Azure gateways…). Adding another API dialect is one file.
@@ -81,7 +83,8 @@ Use one folder per app and keep it on persistent storage:
 /srv/ruleshelf/            # or /mnt/user/Data/ruleshelf on Unraid
 └── data/                  # mounted to /data
     ├── ruleshelf.db       # library, index, embeddings, settings, provider keys
-    └── files/             # uploaded PDFs/EPUB/DOCX, untouched
+    ├── files/             # uploaded PDFs/EPUB/DOCX, untouched
+    └── thumbnails/        # generated cover JPEGs (safe to delete)
 ```
 
 The container creates `data/files/` on first start. Back up this whole folder.
@@ -271,6 +274,7 @@ Everything lives in the mounted volume (`/data` by default):
 ```
 /data/ruleshelf.db   SQLite: library, FTS index, embeddings, settings, provider keys
 /data/files/         your uploaded documents, untouched
+/data/thumbnails/    generated cover images; rebuilt on demand if deleted
 ```
 
 Back up by copying the volume, or:

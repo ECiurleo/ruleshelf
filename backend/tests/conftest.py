@@ -15,7 +15,7 @@ os.environ["RULESHELF_DATA_DIR"] = str(_TEST_DIR)
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.config import FILES_DIR  # noqa: E402
+from app.config import FILES_DIR, THUMBNAILS_DIR  # noqa: E402
 from app.db import db, init_db  # noqa: E402
 from app.main import app  # noqa: E402
 
@@ -37,6 +37,8 @@ def clean_library():
         conn.execute("DELETE FROM games")
         conn.execute("DELETE FROM jobs")
     for path in FILES_DIR.glob("*"):
+        path.unlink(missing_ok=True)
+    for path in THUMBNAILS_DIR.glob("*"):
         path.unlink(missing_ok=True)
     init_db()  # re-seed built-in providers/types if a test deleted them
     yield

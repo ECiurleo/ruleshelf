@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 APP_NAME = "Ruleshelf"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,6 +28,7 @@ def _data_dir() -> Path:
 
 DATA_DIR = _data_dir()
 FILES_DIR = DATA_DIR / "files"
+THUMBNAILS_DIR = DATA_DIR / "thumbnails"
 DB_PATH = DATA_DIR / "ruleshelf.db"
 
 IN_CONTAINER = Path("/.dockerenv").exists()
@@ -56,3 +57,4 @@ CHUNK_SIZE = int(os.environ.get("RULESHELF_CHUNK_SIZE", "1100"))
 CHUNK_OVERLAP = int(os.environ.get("RULESHELF_CHUNK_OVERLAP", "160"))
 
 FILES_DIR.mkdir(parents=True, exist_ok=True)
+THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)

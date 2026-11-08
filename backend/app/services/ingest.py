@@ -13,6 +13,7 @@ from app.db import db, utcnow
 from app.extractors import ExtractionError, extract_file
 from app.providers.base import ProviderError
 from app.services.chunking import prepare_pages, split_text
+from app.services.thumbnails import delete_thumbnail, ensure_thumbnail
 
 log = logging.getLogger(__name__)
 
@@ -62,6 +63,7 @@ def _clear_chunks(conn: sqlite3.Connection, document_id: str) -> None:
 
 def unindex_document(conn: sqlite3.Connection, document_id: str) -> None:
     _clear_chunks(conn, document_id)
+    delete_thumbnail(document_id)
 
 
 def ingest_document(document_id: str) -> None:
@@ -134,6 +136,7 @@ def ingest_document(document_id: str) -> None:
             conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
 
         log.info("Indexed %s (%d chunks)", doc["original_filename"], len(rows))
+        _thumbnail_quietly(document_id)
     except Exception as exc:  # noqa: BLE001 - surfaced to the UI
         message = str(exc) if isinstance(exc, ExtractionError) else f"Indexing failed: {exc}"
         log.warning("Ingestion failed for %s: %s", doc["original_filename"], exc)
@@ -145,6 +148,17 @@ def ingest_document(document_id: str) -> None:
         return
 
     _embed_document_quietly(document_id)
+
+
+def _thumbnail_quietly(document_id: str) -> None:
+    """Best-effort: a broken cover must never fail ingestion."""
+    try:
+        with db() as conn:
+            row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
+        if row:
+            ensure_thumbnail(row)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Thumbnail failed for %s: %s", document_id, exc)
 
 
 def _embed_document_quietly(document_id: str) -> None:

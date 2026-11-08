@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -14,6 +15,7 @@ from app.config import FILES_DIR, MAX_UPLOAD_BYTES
 from app.db import db, get_setting, utcnow
 from app.extractors import resolve_extension
 from app.services.ingest import submit_ingest, unindex_document
+from app.services.thumbnails import delete_thumbnail, ensure_thumbnail
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
@@ -59,6 +61,8 @@ def _doc_payload(conn, row, embedding_model: str) -> dict:
         "page_count": row["page_count"],
         "chunk_count": row["chunk_count"],
         "embedded_chunks": embedded,
+        "thumbnail_url": f"/api/documents/{row['id']}/thumbnail?v="
+        + quote(row["indexed_at"] or row["created_at"] or "", safe=""),
         "status": row["status"],
         "error": row["error"],
         "created_at": row["created_at"],
@@ -159,6 +163,22 @@ async def upload_document(
     return payload
 
 
+@router.get("/{document_id}/thumbnail")
+def document_thumbnail(document_id: str):
+    with db() as conn:
+        row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "Document not found.")
+    path = ensure_thumbnail(row)
+    if not path or not path.exists():
+        raise HTTPException(404, "No thumbnail available.")
+    return FileResponse(
+        path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=604800"},
+    )
+
+
 @router.get("/{document_id}")
 def get_document(document_id: str):
     with db() as conn:
@@ -205,6 +225,7 @@ def delete_document(document_id: str):
         conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
     if row["stored_name"]:
         (FILES_DIR / row["stored_name"]).unlink(missing_ok=True)
+    delete_thumbnail(document_id)
     return {"deleted": True}
 
 

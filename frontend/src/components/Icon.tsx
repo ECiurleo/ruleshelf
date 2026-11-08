@@ -18,7 +18,9 @@ export type IconName =
   | "download"
   | "edit"
   | "arrow-left"
-  | "dice";
+  | "dice"
+  | "grid"
+  | "list";
 
 const paths: Record<IconName, React.ReactNode> = {
   search: (
@@ -97,6 +99,20 @@ const paths: Record<IconName, React.ReactNode> = {
     <>
       <rect x="3" y="3" width="18" height="18" rx="3" />
       <path d="M8 8h.01M16 8h.01M12 12h.01M8 16h.01M16 16h.01" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="3" y="3" width="7" height="7" rx="1.5" />
+      <rect x="14" y="3" width="7" height="7" rx="1.5" />
+      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="14" y="14" width="7" height="7" rx="1.5" />
+    </>
+  ),
+  list: (
+    <>
+      <path d="M8 6h13M8 12h13M8 18h13" />
+      <path d="M3 6h.01M3 12h.01M3 18h.01" />
     </>
   ),
 };

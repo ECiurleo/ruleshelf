@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Document } from "../lib/api";
 import { formatBytes, formatDate, plural } from "../lib/api";
 import { Icon } from "./Icon";
@@ -24,6 +25,7 @@ export function DocumentCard({
   onDelete: () => void;
   onRetitle: (title: string) => void;
 }) {
+  const [thumbFailed, setThumbFailed] = useState(false);
   const failed = doc.status === "error";
   const busy = doc.status === "pending" || doc.status === "processing";
 
@@ -34,8 +36,17 @@ export function DocumentCard({
 
   return (
     <article className={`document-card ${failed ? "failed" : ""}`}>
-      <div className="doc-icon" aria-hidden="true">
-        <Icon name="book" size={20} />
+      <div className={`doc-thumb ${thumbFailed ? "fallback" : ""}`} aria-hidden="true">
+        {thumbFailed ? (
+          <Icon name="book" size={18} />
+        ) : (
+          <img
+            src={doc.thumbnail_url}
+            alt=""
+            loading="lazy"
+            onError={() => setThumbFailed(true)}
+          />
+        )}
       </div>
       <div className="doc-main">
         <div className="doc-title-row">

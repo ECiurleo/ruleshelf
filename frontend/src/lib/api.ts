@@ -42,6 +42,7 @@ export interface Document {
   page_count: number;
   chunk_count: number;
   embedded_chunks: number;
+  thumbnail_url: string;
   status: DocumentStatus;
   error: string | null;
   created_at: string;
