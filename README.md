@@ -66,6 +66,95 @@ To build the image yourself instead of pulling:
 docker compose -f compose.dev.yml up -d --build
 ```
 
+## Install on your own server
+
+Ruleshelf is a single container and works on Unraid, Synology, a VPS or any Docker host. The only
+required mount is a writable folder for the database and uploaded files.
+
+### 1. Choose a data folder
+
+Use one folder per app and keep it on persistent storage:
+
+```
+/srv/ruleshelf/            # or /mnt/user/Data/ruleshelf on Unraid
+└── data/                  # mounted to /data
+    ├── ruleshelf.db       # library, index, embeddings, settings, provider keys
+    └── files/             # uploaded PDFs/EPUB/DOCX, untouched
+```
+
+The container creates `data/files/` on first start. Back up this whole folder.
+
+### 2. Pick a free port
+
+The container listens on **8000**; map it to any free host port. Before choosing, check:
+
+```bash
+ss -ltn | grep ':8787 ' || echo "8787 is free"
+# or, on Unraid
+docker ps --format '{{.Names}}\t{{.Ports}}' | grep 8787 || true
+```
+
+### 3. Run it
+
+```bash
+docker run -d --name Ruleshelf \
+  --restart unless-stopped \
+  -p 8787:8000 \
+  -v /srv/ruleshelf/data:/data \
+  -e PUID=1000 -e PGID=1000 \
+  -e RULESHELF_OLLAMA_URL=http://host.docker.internal:11434 \
+  --add-host=host.docker.internal:host-gateway \
+  ghcr.io/eciurleo/ruleshelf:latest
+```
+
+- `PUID`/`PGID` control who owns `/data`. Use your own user's ids (`id -u`, `id -g`); on Unraid use
+  `99` and `100` (`nobody:users`) so the folder is accessible over SMB. The container chowns
+  `/data` on start and then drops root.
+- `--add-host` is only needed to reach Ollama running on the Docker host.
+- Drop the port/volume flags if you use the compose file below.
+
+Or use Compose:
+
+```yaml
+services:
+  ruleshelf:
+    image: ghcr.io/eciurleo/ruleshelf:latest
+    container_name: Ruleshelf
+    ports:
+      - "8787:8000"
+    volumes:
+      - /srv/ruleshelf/data:/data
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      RULESHELF_OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+```
+
+Upgrade by pulling the new image and recreating the container; the volume is untouched:
+
+```bash
+docker pull ghcr.io/eciurleo/ruleshelf:latest
+docker rm -f Ruleshelf   # then re-run the command above, or `docker compose up -d`
+```
+
+### Unraid
+
+A ready-made template is in [`deploy/unraid/ruleshelf.xml`](deploy/unraid/ruleshelf.xml):
+
+```
+/mnt/user/Data/ruleshelf/
+└── data/                 # /data in the container
+```
+
+The template uses port **8787**, `PUID=99`, `PGID=100` and mounts
+`/mnt/user/Data/ruleshelf/data`. Import it via **Docker → Add Container → Template**, or copy it
+to `/boot/config/plugins/dockerMan/templates-user/`. There is also
+[`deploy/unraid/docker-compose.yml`](deploy/unraid/docker-compose.yml) for the Compose Manager
+plugin. Check the port is free first — Unraid commonly uses 8080 (Immich), 3001, 8085 and 9696.
+
 ## Setting up AI
 
 Keyword search works with no configuration at all. Meaning search and *Ask AI* need a provider.
@@ -145,8 +234,12 @@ Everything lives in the mounted volume (`/data` by default):
 Back up by copying the volume, or:
 
 ```bash
+# named volume
 docker run --rm -v ruleshelf-data:/data -v "$PWD":/backup alpine \
   tar czf /backup/ruleshelf-backup.tgz -C /data .
+
+# bind mount (Unraid or /srv layouts)
+tar czf ruleshelf-backup.tgz -C /mnt/user/Data/ruleshelf data
 ```
 
 Ruleshelf has no accounts and no outbound telemetry. Bind it to `127.0.0.1` (or put it behind your
@@ -157,6 +250,7 @@ own reverse proxy) if the machine is shared — anyone who can reach the port ca
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `RULESHELF_DATA_DIR` | `/data` in the image | Database and uploaded files. |
+| `PUID` / `PGID` | `1000` / `1000` | Owner of `/data`; the container drops to this uid/gid. Unraid: `99`/`100`. |
 | `RULESHELF_OLLAMA_URL` | `http://host.docker.internal:11434` in Docker | Default Ollama address seeded for new installs. |
 | `RULESHELF_MAX_UPLOAD_MB` | `512` | Per-file upload limit. |
 | `RULESHELF_CHUNK_SIZE` / `..._OVERLAP` | `1100` / `160` | Indexing window. Re-index documents after changing. |

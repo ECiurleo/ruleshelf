@@ -9,6 +9,9 @@ services:
     environment:
       # Host-installed Ollama, reachable from inside the container.
       RULESHELF_OLLAMA_URL: http://host.docker.internal:11434
+      # Unraid: 99/100 (nobody:users); most Linux desktops: 1000/1000
+      PUID: "1000"
+      PGID: "1000"
       # RULESHELF_MAX_UPLOAD_MB: "512"
     extra_hosts:
       - "host.docker.internal:host-gateway"

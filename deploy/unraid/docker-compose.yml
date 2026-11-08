@@ -1,0 +1,17 @@
+# Example for a host that has Docker Compose (e.g. Unraid's Compose Manager).
+# Adjust the host path and port for your system, then: docker compose up -d
+services:
+  ruleshelf:
+    image: ghcr.io/eciurleo/ruleshelf:latest
+    container_name: Ruleshelf
+    ports:
+      - "8787:8000"
+    volumes:
+      - /mnt/user/Data/ruleshelf/data:/data
+    environment:
+      PUID: "99"
+      PGID: "100"
+      RULESHELF_OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Ruleshelf</Name>
+  <Repository>ghcr.io/eciurleo/ruleshelf:latest</Repository>
+  <Registry>https://github.com/ECiurleo/ruleshelf/pkgs/container/ruleshelf</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <MyMAC/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/ECiurleo/ruleshelf/issues</Support>
+  <Project>https://github.com/ECiurleo/ruleshelf</Project>
+  <ReadMe>Searchable library for tabletop rulebooks: keyword, semantic and AI answers with page citations. Data lives in /mnt/user/Data/ruleshelf/data (SQLite + uploaded files). Set an Ollama or hosted-model provider in Settings to enable Ask AI.</ReadMe>
+  <Overview>Ruleshelf - rulebook search and cited answers for RPGs, board games and wargames.</Overview>
+  <Category>Tools: Productivity:</Category>
+  <WebUI>http://192.168.2.252:8787/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/ECiurleo/ruleshelf/main/deploy/unraid/ruleshelf.xml</TemplateURL>
+  <ExtraParams>--add-host=host.docker.internal:host-gateway --init --stop-timeout 30</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="WebUI" Target="8000" Default="8000" Mode="tcp" Description="Ruleshelf web interface" Type="Port" Display="always" Required="true" Mask="false">8787</Config>
+  <Config Name="Appdata" Target="/data" Default="/data" Mode="rw" Description="SQLite database and uploaded rulebooks" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/Data/ruleshelf/data</Config>
+  <Config Name="PUID" Target="PUID" Default="1000" Mode="" Description="Host user id that owns /data (Unraid: 99)" Type="Variable" Display="advanced" Required="false" Mask="false">99</Config>
+  <Config Name="PGID" Target="PGID" Default="1000" Mode="" Description="Host group id that owns /data (Unraid: 100)" Type="Variable" Display="advanced" Required="false" Mask="false">100</Config>
+  <Config Name="Ollama URL" Target="RULESHELF_OLLAMA_URL" Default="http://host.docker.internal:11434" Mode="" Description="Ollama endpoint seeded for new installs; change in Settings if Ollama runs elsewhere" Type="Variable" Display="advanced" Required="false" Mask="false">http://host.docker.internal:11434</Config>
+  <Config Name="Max upload MB" Target="RULESHELF_MAX_UPLOAD_MB" Default="512" Mode="" Description="Per-file upload limit" Type="Variable" Display="advanced" Required="false" Mask="false">512</Config>
+</Container>
