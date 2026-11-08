@@ -33,7 +33,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Scan image (SARIF)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: ruleshelf:scan
@@ -44,7 +44,7 @@ jobs:
           exit-code: "0"
 
       - name: Scan image (human-readable)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: image
           image-ref: ruleshelf:scan
