@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import sqlite3
 from typing import Sequence
@@ -9,8 +10,55 @@ from typing import Sequence
 from app.db import get_setting
 from app.defaults import DEFAULT_SYSTEM_PROMPT
 
+log = logging.getLogger(__name__)
+
 MAX_CONTEXT_CHARS = 16_000
 MAX_CHUNK_CHARS = 2_200
+
+REWRITE_SYSTEM = (
+    "You convert tabletop rules questions into concise keyword searches for a "
+    "rulebook index. Return 1 to 3 lines. Each line must be 2 to 4 words, using "
+    "likely rule, section or table names. No numbering, quotes or explanation."
+)
+
+
+def rewrite_queries(provider, model: str, question: str) -> list[str]:
+    """Ask the chat model for a few short index-friendly queries."""
+    try:
+        response = "".join(
+            provider.chat(
+                [
+                    {"role": "system", "content": REWRITE_SYSTEM},
+                    {"role": "user", "content": question},
+                ],
+                model,
+                temperature=0.0,
+                max_tokens=100,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 - expansion is optional
+        log.warning("Query rewrite failed: %s", exc)
+        return []
+
+    queries: list[str] = []
+    seen = {question.strip().lower()}
+    for raw in response.splitlines():
+        line = raw.strip()
+        line = re.sub(r"^[-*•\d.\s]+", "", line)
+        line = line.strip(" \t\"'")
+        if not line or len(line) > 80:
+            continue
+        words = line.split()
+        if not (2 <= len(words) <= 6):
+            continue
+        key = line.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        queries.append(line)
+        if len(queries) >= 3:
+            break
+    return queries
 
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]<>])")
 
@@ -82,8 +130,11 @@ def build_messages(
         f"{context}\n\n"
         f"Question: {query}\n\n"
         "Answer using only these excerpts, citing the excerpt number in square "
-        "brackets after every rule statement. If the excerpts do not answer it, "
-        "say what is missing."
+        "brackets after every rule statement. Put the direct answer in the first "
+        "sentence. When the excerpts give a formula or table, do the arithmetic "
+        "(for example Walk = Movement x 2 and Run = Movement x 4) and state the "
+        "numbers. When asked to compare, use the values found in the excerpts. "
+        "If the excerpts do not answer it, say what is missing."
     )
 
     messages: list[dict] = [{"role": "system", "content": system_prompt(conn)}]

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+from itertools import combinations
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -14,8 +15,15 @@ from app.db import db, get_setting
 from app.providers import Provider, ProviderConfig, build_provider
 from app.providers.base import ProviderError
 from app.services.embeddings import resolve_embedding
-from app.services.rag import build_messages, references_markdown
-from app.services.search import SearchFilters, search
+from app.services.rag import build_messages, references_markdown, rewrite_queries
+from app.services.search import (
+    SearchFilters,
+    build_match_query,
+    role_info,
+    rrf_merge,
+    search,
+    search_keyword,
+)
 
 router = APIRouter(prefix="/api", tags=["search"])
 
@@ -25,6 +33,57 @@ def _optional_embedding(conn: sqlite3.Connection) -> tuple[Provider, str] | None
         return resolve_embedding(conn)
     except ProviderError:
         return None
+
+
+def _answer_results(
+    conn: sqlite3.Connection,
+    question: str,
+    provider: Provider,
+    model: str,
+    mode: str,
+    filters: SearchFilters,
+    limit: int,
+    embedding: tuple[Provider, str] | None,
+) -> tuple[list[dict], str, str | None, list[str]]:
+    """Retrieve for the question and a few model-written keyword variants.
+
+    Questions such as "how fast can a dwarf run" rarely contain the rulebook's
+    own term ("Movement"), so a single lexical search misses the stat table.
+    """
+    results, mode_used, note = search(
+        conn, question, mode=mode, filters=filters, limit=limit, embedding=embedding
+    )
+    queries = rewrite_queries(provider, model, question)
+    if not queries:
+        return results, mode_used, note, []
+
+    lists = [results]
+    roles = role_info(conn)
+    for expanded in queries:
+        try:
+            extra, _, _ = search(
+                conn,
+                expanded,
+                mode=mode,
+                filters=filters,
+                limit=max(limit * 2, 10),
+                embedding=embedding,
+            )
+            if extra:
+                lists.append(extra)
+        except ProviderError:
+            pass
+
+        terms = [t.rstrip("*") for t in re.findall(r'"([^"]+)"', build_match_query(expanded))]
+        for first, second in combinations(terms[:4], 2):
+            keyword_hits = search_keyword(
+                conn, f"{first} {second}", filters, max(limit * 2, 10), roles
+            )
+            if keyword_hits:
+                lists.append(keyword_hits)
+
+    merged = rrf_merge(*lists, limit=limit)
+    return merged, "hybrid" if len(lists) > 1 else mode_used, note, queries
 
 
 def _embedding_info(embedding: tuple[Provider, str] | None, mode_used: str) -> dict | None:
@@ -143,13 +202,15 @@ def ask(payload: AskRequest):
         )
         embedding = _optional_embedding(conn)
         try:
-            results, mode_used, note = search(
+            results, mode_used, note, expanded_queries = _answer_results(
                 conn,
                 payload.query,
-                mode=payload.mode,
-                filters=filters,
-                limit=payload.top_k or int(get_setting(conn, "rag_top_k", "10") or 10),
-                embedding=embedding,
+                provider,
+                model,
+                payload.mode,
+                filters,
+                payload.top_k or int(get_setting(conn, "rag_top_k", "10") or 10),
+                embedding,
             )
         except ProviderError as exc:
             raise HTTPException(exc.status_code, exc.message) from exc
@@ -173,6 +234,7 @@ def ask(payload: AskRequest):
                 "provider": provider_name,
                 "model": model,
                 "embedding": embedding_info,
+                "expanded_queries": expanded_queries,
             },
         )
         answered = False

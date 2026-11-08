@@ -15,8 +15,8 @@ export function SearchBar({
   setQuery,
   mode,
   setMode,
-  askMode,
-  setAskMode,
+  answerMode,
+  setAnswerMode,
   onSubmit,
   onClear,
   busy,
@@ -36,8 +36,8 @@ export function SearchBar({
   setQuery: (value: string) => void;
   mode: SearchMode;
   setMode: (value: SearchMode) => void;
-  askMode: boolean;
-  setAskMode: (value: boolean) => void;
+  answerMode: boolean;
+  setAnswerMode: (value: boolean) => void;
   onSubmit: () => void;
   onClear: () => void;
   busy: boolean;
@@ -76,20 +76,20 @@ export function SearchBar({
         }}
       >
         <span className="search-icon">
-          <Icon name={askMode ? "sparkles" : "search"} size={20} />
+          <Icon name={answerMode ? "sparkles" : "search"} size={20} />
         </span>
         <input
           className="search-input"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={
-            askMode
-              ? "Ask a rules question… e.g. “how does a miscast work?”"
+            answerMode
+              ? "Ask a rules question… e.g. “how fast can a dwarf run?”"
               : "Search rules… e.g. “charge reaction”, “critical injury table”"
           }
           autoComplete="off"
           spellCheck={false}
-          aria-label={askMode ? "Ask a question" : "Search rules"}
+          aria-label={answerMode ? "Ask a question" : "Search rules"}
         />
         {query && (
           <button
@@ -117,18 +117,21 @@ export function SearchBar({
           ))}
         </div>
 
-        <label className={`ask-toggle ${askMode ? "on" : ""}`} title="Answer with an AI provider">
+        <label
+          className={`ask-toggle ${answerMode ? "on" : ""}`}
+          title="Answer from your rulebooks at the top of the results"
+        >
           <input
             type="checkbox"
-            checked={askMode}
-            onChange={(event) => setAskMode(event.target.checked)}
+            checked={answerMode}
+            onChange={(event) => setAnswerMode(event.target.checked)}
           />
           <Icon name="sparkles" size={16} />
-          <span>Ask AI</span>
+          <span>Answer</span>
         </label>
 
         <button className="button primary search-submit" type="submit" disabled={busy || !query.trim()}>
-          {busy ? <span className="spinner light" /> : askMode ? "Ask" : "Search"}
+          {busy ? <span className="spinner light" /> : answerMode ? "Ask" : "Search"}
         </button>
       </form>
 
@@ -160,7 +163,7 @@ export function SearchBar({
             clear
           </button>
         )}
-        {askMode && (
+        {answerMode && (
           <ModelPicker
             providers={providers}
             value={chatChoice}

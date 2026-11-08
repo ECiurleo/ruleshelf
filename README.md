@@ -23,9 +23,12 @@ docker compose up -d      # then open http://localhost:8080
   - *Keyword* — SQLite FTS5, exact words, names and table entries.
   - *Meaning* — vector search over your embedding model.
   - *Smart* — hybrid keyword + vector ranking (reciprocal rank fusion).
-- **Ask the rules.** Retrieval-augmented answers stream from the AI provider you choose. Every
-  answer ends with a References block listing the document, page and a link to the source, and each
-  inline `[n]` citation is clickable straight into the in-app reader.
+- **Answer-first search.** Every search returns a cited answer above the results, not just a list
+  of pages. Questions are expanded into rulebook vocabulary first (so "how fast can a dwarf run"
+  finds the Movement table), and answers show their arithmetic and sources. Turn the **Answer**
+  toggle off for results-only search.
+- **Grounded answers.** Citations link straight into the reader; every answer ends with a
+  References block listing the document, page and a link to the source.
 - **Reader built in.** Open any result in a drawer, read the page, jump to the original PDF at that
   page, or download the file.
 - **Cover view.** Generated thumbnails from PDF/EPUB covers (and typographic cards for other

@@ -216,6 +216,39 @@ def test_references_include_document_page_and_link():
     assert "2. [Zoo" in cited
 
 
+def test_rewrite_queries_filters_and_limits():
+    from app.services.rag import rewrite_queries
+
+    class RewriteProvider(Provider):
+        def chat(self, messages, model, temperature=0.2, max_tokens=2048):
+            yield "dwarf movement\n- Movement Table walk run\n1. dwarf running speed\n"
+
+    provider = RewriteProvider(ProviderConfig(id="fake", name="Fake", kind="fake", base_url=""))
+    assert rewrite_queries(provider, "fake-model", "how fast can a dwarf run") == [
+        "dwarf movement",
+        "Movement Table walk run",
+        "dwarf running speed",
+    ]
+
+
+def test_settings_report_chat_readiness(client):
+    assert client.get("/api/settings").json()["info"]["chat_ready"] is False
+    client.put(
+        "/api/settings",
+        json={
+            "default_chat_provider": "ollama",
+            "default_chat_model": "llama3.1:8b-instruct-q4_K_M",
+        },
+    )
+    info = client.get("/api/settings").json()["info"]
+    assert info["chat_ready"] is True
+    assert info["chat_model_active"] == "llama3.1:8b-instruct-q4_K_M"
+    client.put(
+        "/api/settings",
+        json={"default_chat_provider": "", "default_chat_model": ""},
+    )
+
+
 def test_game_types_expose_errata_precedence(client):
     types = {item["id"]: item for item in client.get("/api/game-types").json()["game_types"]}
     for game_type in ("rpg", "boardgame", "wargame"):

@@ -51,7 +51,7 @@ export default function App() {
 
   const [query, setQuery] = useState("");
   const [mode, setMode] = useState<SearchMode>("hybrid");
-  const [askMode, setAskMode] = useState(false);
+  const [answerMode, setAnswerMode] = useState(false);
   const [searchAllGames, setSearchAllGames] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
   const [searching, setSearching] = useState(false);
@@ -80,6 +80,7 @@ export default function App() {
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const answerInitialized = useRef(false);
   const answerRef = useRef("");
   const conversationRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
 
@@ -119,6 +120,14 @@ export default function App() {
       .catch((err: Error) => setLoadError(err.message))
       .finally(() => setLoading(false));
   }, [refreshLibrary]);
+
+  // Answers are the default when a chat provider is configured; the toggle
+  // still allows results-only searches.
+  useEffect(() => {
+    if (!bundle || answerInitialized.current) return;
+    setAnswerMode(bundle.info.chat_ready);
+    answerInitialized.current = true;
+  }, [bundle]);
 
   // Hash routing: #/game/<id> or #/
   useEffect(() => {
@@ -222,7 +231,7 @@ export default function App() {
     answerRef.current = "";
     const scope = activeGameId && !searchAllGames ? activeGameId : undefined;
 
-    if (!askMode) {
+    if (!answerMode) {
       try {
         const response = await api.search({
           q: text,
@@ -293,6 +302,25 @@ export default function App() {
     } catch (err) {
       if ((err as Error).name !== "AbortError") {
         setSearchError((err as Error).message);
+        // If no provider is configured (or it fails before streaming), still
+        // show useful search results.
+        try {
+          const fallback = await api.search({
+            q: text,
+            mode,
+            game_id: scope,
+            roles,
+            limit: 30,
+          });
+          setResults(fallback.results);
+          setMeta({
+            mode_used: fallback.mode_used,
+            note: fallback.note,
+            embedding: fallback.embedding,
+          });
+        } catch {
+          /* keep the original error */
+        }
       }
     } finally {
       setSearching(false);
@@ -403,7 +431,7 @@ export default function App() {
           query={query}
           results={results}
           meta={meta}
-          askMode={askMode}
+          answerMode={answerMode}
           asking={searching}
           answer={answer}
           error={searchError}
@@ -484,8 +512,8 @@ export default function App() {
             setQuery={setQuery}
             mode={mode}
             setMode={setMode}
-            askMode={askMode}
-            setAskMode={setAskMode}
+            answerMode={answerMode}
+            setAnswerMode={setAnswerMode}
             onSubmit={runSearch}
             onClear={() => {
               setQuery("");

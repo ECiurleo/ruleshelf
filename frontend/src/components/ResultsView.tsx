@@ -39,7 +39,7 @@ export function ResultsView({
   query,
   results,
   meta,
-  askMode,
+  answerMode,
   asking,
   answer,
   error,
@@ -56,7 +56,7 @@ export function ResultsView({
     model?: string;
     embedding?: { provider_name: string; model: string } | null;
   } | null;
-  askMode: boolean;
+  answerMode: boolean;
   asking: boolean;
   answer: string;
   error: string;
@@ -64,7 +64,7 @@ export function ResultsView({
   onStop: () => void;
   onConfigure: () => void;
 }) {
-  const showAnswer = askMode && (asking || answer || error);
+  const showAnswer = answerMode && (asking || answer || error);
 
   // Make [n] citations clickable; the server also appends a References block
   // linking each source to its document page.
@@ -127,7 +127,7 @@ export function ResultsView({
     <div className="view results-view">
       <div className="results-heading">
         <div>
-          <p className="eyebrow">{askMode ? "Answer" : "Search results"}</p>
+          <p className="eyebrow">{answerMode ? "Answer" : "Search results"}</p>
           <h2>{query}</h2>
         </div>
         {meta && (
@@ -236,11 +236,11 @@ export function ResultsView({
       {results.length > 0 && (
         <section className="source-list">
           <h3>
-            {askMode ? "Sources" : `${results.length} ${results.length === 1 ? "match" : "matches"}`}
+            {answerMode ? "Sources" : `${results.length} ${results.length === 1 ? "match" : "matches"}`}
           </h3>
           {results.map((result, index) => (
             <div className="source-row" key={result.chunk_id}>
-              {askMode && <span className="source-number">{index + 1}</span>}
+              {answerMode && <span className="source-number">{index + 1}</span>}
               <ResultCard result={result} onOpen={() => onOpenResult(result)} />
             </div>
           ))}

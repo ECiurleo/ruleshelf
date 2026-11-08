@@ -94,6 +94,19 @@ def _settings_payload(conn: sqlite3.Connection) -> dict:
             embedding_ready, embedding_error = False, exc.message
     else:
         embedding_ready, embedding_error = False, "No embedding provider selected."
+
+    chat_provider = settings.get("default_chat_provider", "")
+    chat_model = settings.get("default_chat_model", "")
+    chat_row = (
+        conn.execute(
+            "SELECT enabled, chat_model FROM providers WHERE id = ?", (chat_provider,)
+        ).fetchone()
+        if chat_provider
+        else None
+    )
+    if not chat_model and chat_row:
+        chat_model = chat_row["chat_model"]
+    chat_ready = bool(chat_row and chat_row["enabled"] and chat_model)
     return {
         "settings": settings,
         "info": {
@@ -107,6 +120,8 @@ def _settings_payload(conn: sqlite3.Connection) -> dict:
             "embedding_ready": embedding_ready,
             "embedding_error": embedding_error,
             "embedding_model_active": embedding_model,
+            "chat_ready": chat_ready,
+            "chat_model_active": chat_model,
             "provider_names": provider_names,
         },
     }
