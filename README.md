@@ -415,6 +415,15 @@ register_extractor(["rtf"], "Rich Text", extract_rtf)
 Other extension points: `services/chunking.py` (splitting), `services/search.py` (ranking),
 `services/rag.py` (prompting), or add a new router in `app/api/`.
 
+## Security and dependency updates
+
+- **Container scan:** every push, pull request and weekly schedule builds the image and scans it
+  with Trivy (HIGH/CRITICAL, fixed findings only). Results are uploaded to
+  **Security → Code scanning** and kept as a workflow artifact.
+- **Dependabot:** weekly updates for npm, pip, GitHub Actions and the Docker base image. Patch and
+  minor updates auto-merge after CI and the security scan pass; **major updates are left for manual
+  review**. Auto-merge is a workflow using `pull_request_target`; it never checks out or runs PR code.
+
 ## Troubleshooting
 
 - **“Ollama unreachable” from Docker.** Use `http://host.docker.internal:11434`, keep
