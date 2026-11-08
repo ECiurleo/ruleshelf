@@ -10,6 +10,8 @@ export function Sidebar({
   onSelect,
   onNewGame,
   onSettings,
+  theme,
+  onToggleTheme,
   onClose,
 }: {
   games: Game[];
@@ -20,6 +22,8 @@ export function Sidebar({
   onSelect: (id: string | null) => void;
   onNewGame: () => void;
   onSettings: () => void;
+  theme: "light" | "dark";
+  onToggleTheme: () => void;
   onClose: () => void;
 }) {
   return (
@@ -99,6 +103,10 @@ export function Sidebar({
               ) : null}
             </div>
           )}
+          <button className="nav-item" onClick={onToggleTheme}>
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
+            <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+          </button>
           <button className="nav-item" onClick={onSettings}>
             <Icon name="settings" size={17} />
             <span>Settings</span>

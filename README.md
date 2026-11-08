@@ -33,6 +33,9 @@ docker compose up -d      # then open http://localhost:8080
   page, or download the file.
 - **Cover view.** Generated thumbnails from PDF/EPUB covers (and typographic cards for other
   formats) in a cover grid with actions overlaid on each book, or a compact list with small covers.
+- **Light and dark themes.** A warm paper light theme and the original dark theme, with a toggle in
+  the sidebar (and top bar). The choice is remembered per browser and follows the system theme on
+  first visit.
 - **Bring your own model.** Built-in support for **Ollama** (free/local), **OpenAI/ChatGPT**,
   **Anthropic Claude**, **DeepSeek** and **Qwen/DashScope**, plus any OpenAI-compatible endpoint
   (OpenRouter, LM Studio, vLLM, LiteLLM, Azure gateways…). Adding another API dialect is one file.

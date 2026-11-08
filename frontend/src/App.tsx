@@ -45,6 +45,9 @@ export default function App() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<"light" | "dark">(() =>
+    document.documentElement.dataset.theme === "light" ? "light" : "dark",
+  );
 
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -127,6 +130,16 @@ export default function App() {
     const result = await api.campaigns(gameId);
     setCampaigns(result.campaigns);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("ruleshelf:theme", theme);
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", theme === "dark" ? "#0f1115" : "#f6f2e9");
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((current) => (current === "dark" ? "light" : "dark"));
 
   // Initial load
   useEffect(() => {
@@ -554,6 +567,8 @@ export default function App() {
           setSidebarOpen(false);
           setSettingsOpen(true);
         }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
         onClose={() => setSidebarOpen(false)}
       />
 
@@ -601,6 +616,14 @@ export default function App() {
             }
             defaultChatModel={bundle?.settings.default_chat_model ?? ""}
           />
+          <button
+            className="icon-button topbar-theme"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
+          >
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={19} />
+          </button>
           <button
             className="icon-button topbar-settings"
             onClick={() => setSettingsOpen(true)}
