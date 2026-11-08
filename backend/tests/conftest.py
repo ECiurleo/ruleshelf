@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.config import FILES_DIR, THUMBNAILS_DIR  # noqa: E402
 from app.db import db, init_db  # noqa: E402
 from app.main import app  # noqa: E402
+from app.services.config_store import CONFIG_PATH  # noqa: E402
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -40,6 +41,7 @@ def clean_library():
         path.unlink(missing_ok=True)
     for path in THUMBNAILS_DIR.glob("*"):
         path.unlink(missing_ok=True)
+    CONFIG_PATH.unlink(missing_ok=True)
     init_db()  # re-seed built-in providers/types if a test deleted them
     yield
 

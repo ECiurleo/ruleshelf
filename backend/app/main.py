@@ -16,6 +16,7 @@ from app.config import APP_NAME, APP_VERSION, DATA_DIR
 from app.db import init_db
 from app.extractors import ExtractionError
 from app.providers.base import ProviderError
+from app.services.config_store import CONFIG_PATH, apply_config_file, snapshot_config
 from app.services.ingest import shutdown
 
 logging.basicConfig(
@@ -29,6 +30,10 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    applied = apply_config_file()
+    if not applied and not CONFIG_PATH.exists():
+        # First run (or a fresh data folder): write the initial snapshot.
+        snapshot_config()
     log.info("%s %s ready — data in %s", APP_NAME, APP_VERSION, DATA_DIR)
     yield
     shutdown()

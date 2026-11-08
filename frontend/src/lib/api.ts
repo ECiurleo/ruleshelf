@@ -143,6 +143,7 @@ export interface AppSettings {
     embedding_ready: boolean;
     embedding_error: string | null;
     embedding_model_active: string;
+    config_file: string;
     chat_ready: boolean;
     chat_model_active: string;
     provider_names: Record<string, string>;

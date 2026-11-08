@@ -19,6 +19,7 @@ from app.config import (
 from app.db import all_settings, db, get_setting, set_setting
 from app.extractors import supported_extensions
 from app.providers.base import ProviderError
+from app.services.config_store import CONFIG_PATH, snapshot_config
 from app.services.embeddings import resolve_embedding
 from app.services.ingest import create_embed_job
 
@@ -120,6 +121,7 @@ def _settings_payload(conn: sqlite3.Connection) -> dict:
             "embedding_ready": embedding_ready,
             "embedding_error": embedding_error,
             "embedding_model_active": embedding_model,
+            "config_file": str(CONFIG_PATH),
             "chat_ready": chat_ready,
             "chat_model_active": chat_model,
             "provider_names": provider_names,
@@ -156,7 +158,9 @@ def update_settings(payload: SettingsUpdate):
                     set_setting(conn, "embedding_model", row["embed_model"])
                 else:
                     set_setting(conn, "embedding_model", "")
-        return _settings_payload(conn)
+        payload = _settings_payload(conn)
+    snapshot_config()
+    return payload
 
 
 # ---------------------------------------------------------------------------
@@ -229,7 +233,8 @@ def create_game_type(payload: GameTypeCreate):
                 json.dumps([role.model_dump() for role in payload.roles]),
             ),
         )
-        return {**payload.model_dump(), "builtin": False, "game_count": 0}
+    snapshot_config()
+    return {**payload.model_dump(), "builtin": False, "game_count": 0}
 
 
 @router.delete("/game-types/{type_id}")
@@ -246,6 +251,7 @@ def delete_game_type(type_id: str):
         if used:
             raise HTTPException(400, f"{used} game(s) still use this type.")
         conn.execute("DELETE FROM game_types WHERE id = ?", (type_id,))
+    snapshot_config()
     return {"deleted": True}
 
 

@@ -8,7 +8,7 @@ Recommended layout on the array:
 
 ```
 /mnt/user/Data/ruleshelf/
-└── data/          # mounted to /data: ruleshelf.db, files/, thumbnails/
+└── data/          # mounted to /data: ruleshelf.db, config.json, files/, thumbnails/
 ```
 
 Host port `8787` is used in the template. Check it is free first:

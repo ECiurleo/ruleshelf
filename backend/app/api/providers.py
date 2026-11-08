@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.db import db, set_setting, utcnow
 from app.providers import ProviderConfig, build_provider, driver_specs, get_driver
 from app.providers.base import ProviderError
+from app.services.config_store import snapshot_config
 
 router = APIRouter(prefix="/api/providers", tags=["providers"])
 
@@ -88,7 +89,9 @@ def create_provider(payload: ProviderCreate):
             ),
         )
         row = conn.execute("SELECT * FROM providers WHERE id = ?", (provider_id,)).fetchone()
-        return _payload(row)
+        payload = _payload(row)
+    snapshot_config()
+    return payload
 
 
 @router.patch("/{provider_id}")
@@ -122,7 +125,9 @@ def update_provider(provider_id: str, payload: ProviderUpdate):
                 set_setting(conn, "embedding_provider", "")
                 set_setting(conn, "embedding_model", "")
         row = conn.execute("SELECT * FROM providers WHERE id = ?", (provider_id,)).fetchone()
-        return _payload(row)
+        payload = _payload(row)
+    snapshot_config()
+    return payload
 
 
 def get_setting_provider(conn: sqlite3.Connection, key: str) -> str:
@@ -148,6 +153,7 @@ def delete_provider(provider_id: str):
             set_setting(conn, "embedding_provider", "")
             set_setting(conn, "embedding_model", "")
         conn.execute("DELETE FROM providers WHERE id = ?", (provider_id,))
+    snapshot_config()
     return {"deleted": True}
 
 

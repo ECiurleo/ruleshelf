@@ -85,12 +85,19 @@ Use one folder per app and keep it on persistent storage:
 ```
 /srv/ruleshelf/            # or /mnt/user/Data/ruleshelf on Unraid
 └── data/                  # mounted to /data
-    ├── ruleshelf.db       # library, index, embeddings, settings, provider keys
+    ├── ruleshelf.db       # library, index, embeddings
+    ├── config.json        # settings, AI providers and custom game types (mode 0600)
     ├── files/             # uploaded PDFs/EPUB/DOCX, untouched
     └── thumbnails/        # generated cover JPEGs (safe to delete)
 ```
 
-The container creates `data/files/` on first start. Back up this whole folder.
+The container creates `data/files/` and `data/config.json` on first start. Back up this whole
+folder.
+
+`config.json` is written atomically after every settings/provider change and is **re-applied on
+startup**, so it is the source of truth for configuration. Edit it (then restart the container) or
+restore it alongside the data folder to recover the exact configuration. It contains API keys and is
+created with mode `0600`.
 
 ### 2. Pick a free port
 
@@ -279,7 +286,8 @@ Maximum upload size is 512 MB per file (`RULESHELF_MAX_UPLOAD_MB` to change it).
 Everything lives in the mounted volume (`/data` by default):
 
 ```
-/data/ruleshelf.db   SQLite: library, FTS index, embeddings, settings, provider keys
+/data/ruleshelf.db   SQLite: library, FTS index, embeddings
+/data/config.json    settings, provider keys, custom game types (authoritative on startup)
 /data/files/         your uploaded documents, untouched
 /data/thumbnails/    generated cover images; rebuilt on demand if deleted
 ```

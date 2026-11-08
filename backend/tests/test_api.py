@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from app.db import db
+from app.db import db, get_setting, set_setting
 from app.providers.base import ModelInfo, Provider, ProviderConfig
 from app.services.search import SearchFilters, search_semantic
 from tests.conftest import upload_document, wait_until_ready
@@ -164,6 +164,30 @@ def test_ask_requires_provider(client, game):
     response = client.post("/api/ask", json={"query": "miscast", "game_id": game["id"]})
     assert response.status_code == 400
     assert "provider" in response.json()["detail"].lower()
+
+
+def test_config_snapshot_is_written_and_restored(client):
+    import json
+    import stat
+
+    from app.services.config_store import CONFIG_PATH, apply_config_file
+
+    assert CONFIG_PATH.exists()
+    assert stat.S_IMODE(CONFIG_PATH.stat().st_mode) == 0o600
+    snapshot = json.loads(CONFIG_PATH.read_text())
+    assert "settings" in snapshot
+    assert "providers" in snapshot
+    assert "game_types" in snapshot
+
+    client.put("/api/settings", json={"rag_top_k": 9})
+    snapshot = json.loads(CONFIG_PATH.read_text())
+    assert snapshot["settings"]["rag_top_k"] == "9"
+
+    with db() as conn:
+        set_setting(conn, "rag_top_k", "2")
+    assert apply_config_file() is True
+    with db() as conn:
+        assert get_setting(conn, "rag_top_k") == "9"
 
 
 def test_thumbnail_is_generated_and_removed(client, game):

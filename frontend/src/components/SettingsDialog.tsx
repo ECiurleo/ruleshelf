@@ -613,6 +613,10 @@ function TypesTab({
       <p className="fine-print">
         Data directory: <code>{bundle.info.data_dir}</code>
       </p>
+      <p className="fine-print">
+        Configuration snapshot: <code>{bundle.info.config_file}</code> — written on every change and
+        re-applied at startup.
+      </p>
     </div>
   );
 }
