@@ -72,8 +72,9 @@ TIMING_SYSTEM = (
     "what has already happened by then, and whether the card or effect exists at "
     "that point. Setup steps and round phases resolve in printed order; something "
     "introduced after a step cannot be used during it. Respect when, after, before "
-    "and Response wording. If the excerpts do not fix the order, say so instead of "
-    "inventing one."
+    "and Response wording. Read 'then', 'after', 'before', 'finally', 'once' and "
+    "'when' as strict ordering words. If the excerpts do not fix the order, say so "
+    "instead of inventing one."
 )
 
 
@@ -172,8 +173,10 @@ def build_messages(
         "trigger the question depends on and what has already happened at that "
         "point. Setup steps and round phases resolve in the order the rules print "
         "them, so a card or effect introduced after a step cannot be used during "
-        "that step. Respect 'when', 'after', 'before' and 'Response' wording, and "
-        "resolve any ordering the excerpts give. When timing decides the answer, "
+        "that step. Read sequence words literally: 'then', 'after', 'before', "
+        "'finally', 'once' and 'when' fix the order of steps and effects; never "
+        "reorder or compress them. Respect 'Response' wording, and resolve any "
+        "ordering the excerpts give. When timing decides the answer, "
         "state it in one short sentence before the ruling, for example: 'The path "
         "deck is built at step 7 and arrival setup is step 8, so a card added after "
         "arrival setup is not in the deck during setup.' If the excerpts do not fix "

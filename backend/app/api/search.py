@@ -89,7 +89,10 @@ def _answer_results(
             if keyword_hits:
                 lists.append(keyword_hits)
 
-    merged = rrf_merge(*lists, limit=max(limit * 3, 30))
+    # The question itself outranks the model's expanded keyword variants; the
+    # variants add recall but can otherwise drown the exact question.
+    weights = [2.5] + [1.0] * (len(lists) - 1)
+    merged = rrf_merge(*lists, limit=max(limit * 3, 30), weights=weights)
     return (
         diversify(merged, limit),
         "hybrid" if len(lists) > 1 else mode_used,

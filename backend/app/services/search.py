@@ -7,6 +7,7 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass, field
+from typing import Sequence
 
 import numpy as np
 
@@ -320,14 +321,19 @@ def diversify(results: list[dict], limit: int, per_document: int | None = None) 
     return (primary + overflow)[:limit]
 
 
-def rrf_merge(*ranked_lists: list[dict], limit: int) -> list[dict]:
+def rrf_merge(
+    *ranked_lists: list[dict], limit: int, weights: Sequence[float] | None = None
+) -> list[dict]:
     combined: dict[int, dict] = {}
     scores: dict[int, float] = {}
-    for ranked in ranked_lists:
+    for list_index, ranked in enumerate(ranked_lists):
+        list_weight = weights[list_index] if weights else 1.0
         for position, item in enumerate(ranked):
             chunk_id = item["chunk_id"]
             combined.setdefault(chunk_id, item)
-            weight = 1.15 if item["document"].get("overrides") else 1.0
+            weight = list_weight
+            if item["document"].get("overrides"):
+                weight *= 1.15
             scores[chunk_id] = scores.get(chunk_id, 0.0) + weight / (RRF_K + position + 1)
     ordered = sorted(combined.values(), key=lambda item: scores[item["chunk_id"]], reverse=True)
     for item in ordered:

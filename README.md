@@ -25,8 +25,9 @@ docker compose up -d      # then open http://localhost:8080
   - *Smart* — hybrid keyword + vector ranking (reciprocal rank fusion).
 - **Answer-first search.** Every search returns a cited answer above the results, not just a list
   of pages. Questions are expanded into rulebook vocabulary first (so "how fast can a dwarf run"
-  finds the Movement table), and answers show their arithmetic and sources. Turn the **Answer**
-  toggle off for results-only search.
+  finds the Movement table), and answers show their arithmetic and sources. Answers check timing
+  first — setup steps, phases and event order decide whether something can happen — and say when a
+  sequence is unclear instead of guessing. Turn the **Answer** toggle off for results-only search.
 - **Grounded answers.** Citations link straight into the reader; every answer ends with a
   References block listing the document, page and a link to the source.
 - **Reader built in.** Open any result in a drawer, read the page, jump to the original PDF at that
