@@ -1,0 +1,18 @@
+services:
+  ruleshelf:
+    image: ghcr.io/eciurleo/ruleshelf:latest
+    container_name: ruleshelf
+    ports:
+      - "8080:8000"
+    volumes:
+      - ruleshelf-data:/data
+    environment:
+      # Host-installed Ollama, reachable from inside the container.
+      RULESHELF_OLLAMA_URL: http://host.docker.internal:11434
+      # RULESHELF_MAX_UPLOAD_MB: "512"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  ruleshelf-data:

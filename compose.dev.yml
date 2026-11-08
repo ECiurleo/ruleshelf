@@ -1,0 +1,18 @@
+name: ruleshelf
+
+services:
+  ruleshelf:
+    build: .
+    image: ruleshelf:local
+    container_name: ruleshelf
+    ports:
+      - "8080:8000"
+    volumes:
+      - ruleshelf-data:/data
+    environment:
+      RULESHELF_OLLAMA_URL: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  ruleshelf-data:
