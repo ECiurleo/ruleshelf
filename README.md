@@ -33,7 +33,7 @@ docker compose up -d      # then open http://localhost:8080
   (OpenRouter, LM Studio, vLLM, LiteLLM, Azure gateways…). Adding another API dialect is one file.
 - **Data-driven game types.** Built-in RPG / board game / wargame types, and custom types with
   custom roles can be added in Settings.
-- **One container, one volume.** ~0.2 GB image, multi-arch (`amd64` and `arm64`).
+- **One container, one volume.** ~180 MB compressed, multi-arch (`amd64` and `arm64`).
 
 ![Asking a rules question with linked references](docs/screenshots/answer.png)
 
