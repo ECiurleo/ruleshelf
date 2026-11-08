@@ -32,6 +32,7 @@ interface SearchMeta {
   note: string | null;
   provider?: string;
   model?: string;
+  embedding?: { provider_name: string; model: string } | null;
 }
 
 export default function App() {
@@ -59,6 +60,16 @@ export default function App() {
   const [meta, setMeta] = useState<SearchMeta | null>(null);
   const [answer, setAnswer] = useState("");
   const [searchError, setSearchError] = useState("");
+
+  const [chatChoice, setChatChoice] = useState<{ providerId: string; model: string } | null>(
+    () => {
+      try {
+        return JSON.parse(localStorage.getItem("ruleshelf:answerModel") ?? "null");
+      } catch {
+        return null;
+      }
+    },
+  );
 
   const [reader, setReader] = useState<ReaderTarget | null>(null);
   const [addGameOpen, setAddGameOpen] = useState(false);
@@ -141,6 +152,16 @@ export default function App() {
     };
   }, [activeGameId, refreshDocuments, notify]);
 
+  // Drop a remembered model if its provider was removed or disabled.
+  useEffect(() => {
+    if (!chatChoice || !providers) return;
+    const provider = providers.providers.find((entry) => entry.id === chatChoice.providerId);
+    if (!provider || !provider.enabled) {
+      setChatChoice(null);
+      localStorage.removeItem("ruleshelf:answerModel");
+    }
+  }, [providers, chatChoice]);
+
   // Poll while any document is being indexed
   const hasProcessing = documents.some(
     (doc) => doc.status === "pending" || doc.status === "processing",
@@ -211,7 +232,11 @@ export default function App() {
           limit: 30,
         });
         setResults(response.results);
-        setMeta({ mode_used: response.mode_used, note: response.note });
+        setMeta({
+          mode_used: response.mode_used,
+          note: response.note,
+          embedding: response.embedding,
+        });
       } catch (err) {
         setSearchError((err as Error).message);
       } finally {
@@ -231,6 +256,8 @@ export default function App() {
           roles,
           mode,
           history,
+          provider_id: chatChoice?.providerId,
+          model: chatChoice?.model || undefined,
         },
         {
           onSources: (payload) => {
@@ -240,6 +267,7 @@ export default function App() {
               note: payload.note,
               provider: payload.provider,
               model: payload.model,
+              embedding: payload.embedding,
             });
           },
           onToken: (token) => {
@@ -475,6 +503,16 @@ export default function App() {
             setSearchAllGames={setSearchAllGames}
             roles={roles}
             setRoles={setRoles}
+            providers={providers?.providers ?? []}
+            chatChoice={chatChoice}
+            setChatChoice={(choice) => {
+              setChatChoice(choice);
+              localStorage.setItem("ruleshelf:answerModel", JSON.stringify(choice));
+            }}
+            defaultChatProvider={
+              bundle?.info.provider_names[bundle?.settings.default_chat_provider ?? ""] ?? ""
+            }
+            defaultChatModel={bundle?.settings.default_chat_model ?? ""}
           />
           <button
             className="icon-button topbar-settings"

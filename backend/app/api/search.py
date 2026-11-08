@@ -27,6 +27,17 @@ def _optional_embedding(conn: sqlite3.Connection) -> tuple[Provider, str] | None
         return None
 
 
+def _embedding_info(embedding: tuple[Provider, str] | None, mode_used: str) -> dict | None:
+    if not embedding or mode_used == "keyword":
+        return None
+    provider, model = embedding
+    return {
+        "provider_id": provider.config.id,
+        "provider_name": provider.config.name,
+        "model": model,
+    }
+
+
 def _parse_roles(roles: str | None) -> list[str]:
     if not roles:
         return []
@@ -60,6 +71,7 @@ def search_endpoint(
         document_ids=[document_id] if document_id else [],
     )
     with db() as conn:
+        embedding = _optional_embedding(conn)
         try:
             results, mode_used, note = search(
                 conn,
@@ -67,16 +79,18 @@ def search_endpoint(
                 mode=mode,
                 filters=filters,
                 limit=limit,
-                embedding=_optional_embedding(conn),
+                embedding=embedding,
             )
         except ProviderError as exc:
             raise HTTPException(exc.status_code, exc.message) from exc
+        embedding_info = _embedding_info(embedding, mode_used)
     return {
         "query": q,
         "mode": mode,
         "mode_used": mode_used,
         "note": note,
         "count": len(results),
+        "embedding": embedding_info,
         "results": [_public_result(r) for r in results],
     }
 
@@ -127,6 +141,7 @@ def ask(payload: AskRequest):
             roles=payload.roles,
             document_ids=[payload.document_id] if payload.document_id else [],
         )
+        embedding = _optional_embedding(conn)
         try:
             results, mode_used, note = search(
                 conn,
@@ -134,10 +149,11 @@ def ask(payload: AskRequest):
                 mode=payload.mode,
                 filters=filters,
                 limit=payload.top_k or int(get_setting(conn, "rag_top_k", "10") or 10),
-                embedding=_optional_embedding(conn),
+                embedding=embedding,
             )
         except ProviderError as exc:
             raise HTTPException(exc.status_code, exc.message) from exc
+        embedding_info = _embedding_info(embedding, mode_used)
 
         messages, used = build_messages(conn, payload.query, results, payload.history)
         temperature = (
@@ -156,6 +172,7 @@ def ask(payload: AskRequest):
                 "note": note,
                 "provider": provider_name,
                 "model": model,
+                "embedding": embedding_info,
             },
         )
         answered = False

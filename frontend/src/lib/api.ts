@@ -65,12 +65,19 @@ export interface SearchResult {
   game: { id: string; title: string; game_type: string };
 }
 
+export interface EmbeddingInfo {
+  provider_id: string;
+  provider_name: string;
+  model: string;
+}
+
 export interface SearchResponse {
   query: string;
   mode: string;
   mode_used: string;
   note: string | null;
   count: number;
+  embedding: EmbeddingInfo | null;
   results: SearchResult[];
 }
 
@@ -306,6 +313,7 @@ export interface AskHandlers {
     note: string | null;
     provider: string;
     model: string;
+    embedding: EmbeddingInfo | null;
   }) => void;
   onToken: (text: string) => void;
   onError: (message: string) => void;

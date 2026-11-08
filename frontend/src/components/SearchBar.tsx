@@ -1,5 +1,6 @@
-import type { Game, GameType } from "../lib/api";
+import type { Game, GameType, Provider } from "../lib/api";
 import { Icon } from "./Icon";
+import { ModelPicker, type ModelChoice } from "./ModelPicker";
 
 export type SearchMode = "keyword" | "hybrid" | "semantic";
 
@@ -25,6 +26,11 @@ export function SearchBar({
   setSearchAllGames,
   roles,
   setRoles,
+  providers,
+  chatChoice,
+  setChatChoice,
+  defaultChatProvider,
+  defaultChatModel,
 }: {
   query: string;
   setQuery: (value: string) => void;
@@ -41,6 +47,11 @@ export function SearchBar({
   setSearchAllGames: (value: boolean) => void;
   roles: string[];
   setRoles: (value: string[]) => void;
+  providers: Provider[];
+  chatChoice: ModelChoice | null;
+  setChatChoice: (value: ModelChoice | null) => void;
+  defaultChatProvider: string;
+  defaultChatModel: string;
 }) {
   const roleOptions = activeGame && !searchAllGames
     ? gameType?.roles ?? []
@@ -148,6 +159,15 @@ export function SearchBar({
           <button type="button" className="link-button" onClick={() => setRoles([])}>
             clear
           </button>
+        )}
+        {askMode && (
+          <ModelPicker
+            providers={providers}
+            value={chatChoice}
+            defaultProvider={defaultChatProvider}
+            defaultModel={defaultChatModel}
+            onChange={setChatChoice}
+          />
         )}
         <span className="filter-note">
           {mode === "semantic"

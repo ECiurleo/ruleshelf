@@ -1,0 +1,45 @@
+# Ruleshelf + Ollama in one stack.
+#
+#   docker compose -f docker-compose.ollama.yml up -d
+#   docker compose -f docker-compose.ollama.yml exec ollama ollama pull nomic-embed-text
+#   docker compose -f docker-compose.ollama.yml exec ollama ollama pull qwen2.5:14b-instruct-q4_K_M
+#   docker compose -f docker-compose.ollama.yml exec ollama ollama pull llama3.1:8b-instruct-q4_K_M
+#
+# Then open http://localhost:8787. On a fresh volume Ruleshelf seeds
+# http://ollama:11434 as the Ollama endpoint; existing installs can change the
+# base URL in Settings -> AI providers.
+name: ruleshelf-ollama
+
+services:
+  ruleshelf:
+    image: ghcr.io/eciurleo/ruleshelf:latest
+    container_name: Ruleshelf
+    ports:
+      - "8787:8000"
+    volumes:
+      - ruleshelf-data:/data
+    environment:
+      # On Unraid use 99/100; most desktops use 1000/1000.
+      PUID: "1000"
+      PGID: "1000"
+      RULESHELF_OLLAMA_URL: http://ollama:11434
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: Ollama
+    ports:
+      # Optional: exposes the API on the host. Remove if you already run Ollama
+      # on port 11434.
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+    restart: unless-stopped
+
+volumes:
+  ruleshelf-data:
+  ollama-models:

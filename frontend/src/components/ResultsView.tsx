@@ -49,7 +49,13 @@ export function ResultsView({
 }: {
   query: string;
   results: SearchResult[];
-  meta: { mode_used: string; note: string | null; provider?: string; model?: string } | null;
+  meta: {
+    mode_used: string;
+    note: string | null;
+    provider?: string;
+    model?: string;
+    embedding?: { provider_name: string; model: string } | null;
+  } | null;
   askMode: boolean;
   asking: boolean;
   answer: string;
@@ -134,8 +140,21 @@ export function ResultsView({
                   : "Keyword"}
             </span>
             {meta.provider && (
-              <span className="results-provider">
-                {meta.provider} · {meta.model}
+              <span className="model-usage" title="Model that wrote this answer">
+                <Icon name="sparkles" size={14} />
+                <span>
+                  <small>Answer model</small>
+                  {meta.provider} · {meta.model}
+                </span>
+              </span>
+            )}
+            {meta.embedding && (
+              <span className="model-usage subtle" title="Model used to find passages">
+                <Icon name="search" size={14} />
+                <span>
+                  <small>Embedding model</small>
+                  {meta.embedding.provider_name} · {meta.embedding.model}
+                </span>
               </span>
             )}
           </div>

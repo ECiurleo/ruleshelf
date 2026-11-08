@@ -31,6 +31,8 @@ docker compose up -d      # then open http://localhost:8080
 - **Bring your own model.** Built-in support for **Ollama** (free/local), **OpenAI/ChatGPT**,
   **Anthropic Claude**, **DeepSeek** and **Qwen/DashScope**, plus any OpenAI-compatible endpoint
   (OpenRouter, LM Studio, vLLM, LiteLLM, Azure gateways…). Adding another API dialect is one file.
+- **Choose the model per question.** The search bar lists every chat model reported by your enabled
+  providers; pick one before asking. Answers show the exact answer model and embedding model used.
 - **Data-driven game types.** Built-in RPG / board game / wargame types, and custom types with
   custom roles can be added in Settings.
 - **One container, one volume.** ~180 MB compressed, multi-arch (`amd64` and `arm64`).
@@ -161,7 +163,21 @@ Keyword search works with no configuration at all. Meaning search and *Ask AI* n
 
 **Option A — local and free (Ollama)**
 
-Run Ollama as a container next to Ruleshelf (or install it natively):
+The repo ships a ready-made stack with Ruleshelf + Ollama:
+
+```bash
+docker compose -f docker-compose.ollama.yml up -d
+docker compose -f docker-compose.ollama.yml exec ollama ollama pull nomic-embed-text
+docker compose -f docker-compose.ollama.yml exec ollama ollama pull qwen2.5:14b-instruct-q4_K_M
+# optional faster model:
+docker compose -f docker-compose.ollama.yml exec ollama ollama pull llama3.1:8b-instruct-q4_K_M
+```
+
+Open <http://localhost:8787>. Ruleshelf reaches Ollama at `http://ollama:11434` inside the compose
+network and the default model is selected in **Settings → Search & answers**. Change the host port
+if 8787 is taken; both the app and model data live in named volumes.
+
+To run Ollama separately instead (or install it natively):
 
 ```bash
 docker run -d --name Ollama --restart unless-stopped \
