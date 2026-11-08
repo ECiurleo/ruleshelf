@@ -176,20 +176,18 @@ export function SearchBar({
             onChange={setChatChoice}
           />
         )}
-        {answerMode && (
-          <label
-            className={`bgg-toggle ${includeBgg ? "on" : ""}`}
-            title="Also search BoardGameGeek forum threads via web search. Unofficial; rulebooks are prioritised."
-          >
-            <input
-              type="checkbox"
-              checked={includeBgg}
-              onChange={(event) => setIncludeBgg(event.target.checked)}
-            />
-            <Icon name="external" size={13} />
-            <span>BGG forums</span>
-          </label>
-        )}
+        <label
+          className={`bgg-toggle ${includeBgg ? "on" : ""}`}
+          title="Also search BoardGameGeek forum threads via web search. Unofficial; rulebooks are prioritised."
+        >
+          <input
+            type="checkbox"
+            checked={includeBgg}
+            onChange={(event) => setIncludeBgg(event.target.checked)}
+          />
+          <Icon name="external" size={13} />
+          <span>BGG forums</span>
+        </label>
         <span className="filter-note">
           {mode === "semantic"
             ? "Uses your embedding model"

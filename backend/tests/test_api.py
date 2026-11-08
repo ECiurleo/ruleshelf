@@ -498,6 +498,46 @@ def test_rag_marks_bgg_forum_sources_as_unofficial():
     assert "/api/documents/" not in markdown
 
 
+def test_rag_keeps_forum_excerpts_when_rulebooks_fill_the_context():
+    from app.services.rag import MAX_CONTEXT_CHARS, build_context
+
+    def rulebook(index: int) -> dict:
+        return {
+            "document": {
+                "id": f"doc{index}",
+                "title": f"Rulebook {index}",
+                "role_label": "Core rules",
+                "overrides": False,
+            },
+            "game": {"title": "WFRP"},
+            "page_start": 1,
+            "page_end": 1,
+            "text": "x" * 2_200,
+        }
+
+    forum = {
+        "source_type": "bgg",
+        "url": "https://boardgamegeek.com/thread/999/edge-case",
+        "document": {
+            "id": "",
+            "title": "Edge case thread",
+            "role_label": "BGG forum",
+            "overrides": False,
+        },
+        "game": {"title": "WFRP"},
+        "page_start": None,
+        "page_end": None,
+        "text": "The forum discusses this edge case.",
+    }
+
+    context, used = build_context([rulebook(i) for i in range(10)] + [forum])
+    assert len(context) <= MAX_CONTEXT_CHARS + 500
+    assert [entry["source_type"] for entry in used if entry.get("source_type") == "bgg"] == [
+        "bgg"
+    ]
+    assert "BGG FORUM (unofficial)" in context
+
+
 def test_unsupported_upload_rejected(client, game):
     response = client.post(
         "/api/documents",

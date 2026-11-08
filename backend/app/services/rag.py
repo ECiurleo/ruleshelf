@@ -94,19 +94,39 @@ def _citation_label(result: dict) -> str:
 
 
 def build_context(results: Sequence[dict]) -> tuple[str, list[dict]]:
+    """Build the citation-numbered context, keeping forum snippets in budget.
+
+    Rulebook excerpts stay first and authoritative, but they must not consume
+    the whole window: BGG results are appended last, so reserve room for them
+    instead of letting the first long books crowd them out.
+    """
+    forum = [result for result in results if result.get("source_type") == "bgg"]
+    rules = [result for result in results if result.get("source_type") != "bgg"]
+    reserved = sum(min(len(result["text"].strip()), 600) + 140 for result in forum)
+    rule_budget = max(MAX_CONTEXT_CHARS - reserved, MAX_CONTEXT_CHARS // 2)
+
     blocks: list[str] = []
     used: list[dict] = []
     total = 0
-    for result in results:
+
+    def add(result: dict, budget: int) -> None:
+        nonlocal total
         text = result["text"].strip()
+        if not text:
+            return
         if len(text) > MAX_CHUNK_CHARS:
             text = text[:MAX_CHUNK_CHARS].rsplit(" ", 1)[0] + " …"
         block = f"[{len(used) + 1}] {_citation_label(result)}\n{text}"
-        if total + len(block) > MAX_CONTEXT_CHARS and used:
-            break
+        if total + len(block) > budget and used:
+            return
         blocks.append(block)
         used.append({**result, "ref": len(used) + 1})
         total += len(block)
+
+    for result in rules:
+        add(result, rule_budget)
+    for result in forum:
+        add(result, MAX_CONTEXT_CHARS)
     return "\n\n".join(blocks), used
 
 

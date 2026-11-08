@@ -103,6 +103,8 @@ export interface SearchResponse {
   note: string | null;
   count: number;
   embedding: EmbeddingInfo | null;
+  bgg_count?: number;
+  bgg_note?: string | null;
   results: SearchResult[];
 }
 
@@ -113,6 +115,7 @@ export interface SearchParams {
   document_id?: string;
   mode: "keyword" | "semantic" | "hybrid";
   limit?: number;
+  include_bgg?: boolean;
 }
 
 export interface Provider {
@@ -330,6 +333,7 @@ export const api = {
     if (params.roles?.length) query.set("roles", params.roles.join(","));
     if (params.document_id) query.set("document_id", params.document_id);
     if (params.limit) query.set("limit", String(params.limit));
+    if (params.include_bgg) query.set("include_bgg", "true");
     return request<SearchResponse>(`/api/search?${query.toString()}`);
   },
 

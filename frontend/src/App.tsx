@@ -69,7 +69,8 @@ export default function App() {
   const [mode, setMode] = useState<SearchMode>("hybrid");
   const [answerMode, setAnswerMode] = useState(false);
   const [includeBgg, setIncludeBggState] = useState(
-    () => localStorage.getItem("ruleshelf:includeBgg") === "1",
+    // On by default; an explicit "0" remembers an opt-out.
+    () => localStorage.getItem("ruleshelf:includeBgg") !== "0",
   );
   const [searchAllGames, setSearchAllGames] = useState(false);
   const [roles, setRoles] = useState<string[]>([]);
@@ -321,12 +322,15 @@ export default function App() {
           game_id: scope,
           roles,
           limit: 30,
+          include_bgg: includeBgg,
         });
         setResults(response.results);
         setMeta({
           mode_used: response.mode_used,
           note: response.note,
           embedding: response.embedding,
+          bgg_count: response.bgg_count ?? 0,
+          bgg_note: response.bgg_note ?? null,
         });
       } catch (err) {
         setSearchError((err as Error).message);
@@ -396,12 +400,15 @@ export default function App() {
             game_id: scope,
             roles,
             limit: 30,
+            include_bgg: includeBgg,
           });
           setResults(fallback.results);
           setMeta({
             mode_used: fallback.mode_used,
             note: fallback.note,
             embedding: fallback.embedding,
+            bgg_count: fallback.bgg_count ?? 0,
+            bgg_note: fallback.bgg_note ?? null,
           });
         } catch {
           /* keep the original error */

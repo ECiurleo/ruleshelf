@@ -126,6 +126,7 @@ def search_endpoint(
     document_id: str | None = None,
     mode: str = Query(default="hybrid", pattern="^(keyword|semantic|hybrid)$"),
     limit: int = Query(default=25, ge=1, le=100),
+    include_bgg: bool = Query(default=False),
 ):
     filters = SearchFilters(
         game_id=game_id,
@@ -146,6 +147,27 @@ def search_endpoint(
         except ProviderError as exc:
             raise HTTPException(exc.status_code, exc.message) from exc
         embedding_info = _embedding_info(embedding, mode_used)
+        game_row = (
+            conn.execute(
+                "SELECT title, game_type FROM games WHERE id = ?", (game_id,)
+            ).fetchone()
+            if game_id
+            else None
+        )
+
+    bgg_results: list[dict] = []
+    bgg_note: str | None = None
+    if include_bgg:
+        game_title = game_row["title"] if game_row else None
+        bgg_results, bgg_note = search_bgg(q, game_title, limit=5)
+        for result in bgg_results:
+            result["game"] = {
+                "id": game_id or "",
+                "title": game_title or "BoardGameGeek",
+                "game_type": game_row["game_type"] if game_row else "other",
+            }
+        results = results + bgg_results
+
     return {
         "query": q,
         "mode": mode,
@@ -153,6 +175,8 @@ def search_endpoint(
         "note": note,
         "count": len(results),
         "embedding": embedding_info,
+        "bgg_count": len(bgg_results),
+        "bgg_note": bgg_note,
         "results": [_public_result(r) for r in results],
     }
 
