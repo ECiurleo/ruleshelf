@@ -45,6 +45,9 @@ export function ResultsView({
   answerMode,
   asking,
   answer,
+  communityAnswer,
+  communityStreaming,
+  communityError,
   error,
   onOpenResult,
   onStop,
@@ -64,6 +67,9 @@ export function ResultsView({
   answerMode: boolean;
   asking: boolean;
   answer: string;
+  communityAnswer?: string;
+  communityStreaming?: boolean;
+  communityError?: string;
   error: string;
   onOpenResult: (result: SearchResult) => void;
   onStop: () => void;
@@ -127,6 +133,16 @@ export function ResultsView({
   };
 
   const hasReferences = /references/i.test(answer);
+  const showCommunity = Boolean(
+    answerMode && (communityAnswer || communityStreaming || communityError),
+  );
+  const renderedCommunity = (communityAnswer ?? "").replace(
+    /\[(\d{1,2})\]/g,
+    (match, value: string) => {
+      const index = Number(value);
+      return index >= 1 && index <= results.length ? `[${index}](#ref-${index})` : match;
+    },
+  );
 
   return (
     <div className="view results-view">
@@ -250,6 +266,35 @@ export function ResultsView({
           <p className="answer-hint">
             Answers are generated from the excerpts below. Always check the cited page at the
             table.
+          </p>
+        </section>
+      )}
+
+      {showCommunity && (
+        <section className="answer-panel community-answer">
+          <div className="answer-head community-head">
+            <span className="answer-icon">
+              <Icon name="external" size={17} />
+            </span>
+            <span>Community Answer</span>
+            <span className="community-badge">Unofficial · BGG forums</span>
+            {communityStreaming && <span className="spinner" />}
+          </div>
+          <div className="answer-body">
+            {communityAnswer ? (
+              <Markdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                {renderedCommunity}
+              </Markdown>
+            ) : communityStreaming ? (
+              <p className="thinking">
+                <span className="spinner" /> Reading BoardGameGeek threads…
+              </p>
+            ) : null}
+            {communityStreaming && communityAnswer && <span className="cursor" />}
+          </div>
+          {communityError && <p className="community-error">{communityError}</p>}
+          <p className="answer-hint">
+            Community posts are not rules text. The rulebook answer above takes precedence.
           </p>
         </section>
       )}

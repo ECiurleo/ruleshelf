@@ -79,6 +79,9 @@ export default function App() {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [meta, setMeta] = useState<SearchMeta | null>(null);
   const [answer, setAnswer] = useState("");
+  const [communityAnswer, setCommunityAnswer] = useState("");
+  const [communityStreaming, setCommunityStreaming] = useState(false);
+  const [communityError, setCommunityError] = useState("");
   const [searchError, setSearchError] = useState("");
 
   const [chatChoice, setChatChoice] = useState<{ providerId: string; model: string } | null>(
@@ -104,6 +107,7 @@ export default function App() {
   const abortRef = useRef<AbortController | null>(null);
   const answerInitialized = useRef(false);
   const answerRef = useRef("");
+  const communityRef = useRef("");
   const conversationRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
 
   const notify = useCallback((message: string, kind: "ok" | "error" = "ok") => {
@@ -236,6 +240,9 @@ export default function App() {
     setResults([]);
     setMeta(null);
     setAnswer("");
+    setCommunityAnswer("");
+    setCommunityStreaming(false);
+    setCommunityError("");
     setSearchError("");
     setRoles([]);
     conversationRef.current = [];
@@ -292,6 +299,9 @@ export default function App() {
     setResults([]);
     setMeta(null);
     setAnswer("");
+    setCommunityAnswer("");
+    setCommunityStreaming(false);
+    setCommunityError("");
     setSearchError("");
   };
 
@@ -299,6 +309,7 @@ export default function App() {
     abortRef.current?.abort();
     abortRef.current = null;
     setSearching(false);
+    setCommunityStreaming(false);
   };
 
   const runSearch = async () => {
@@ -310,8 +321,12 @@ export default function App() {
     setResults([]);
     setMeta(null);
     setAnswer("");
+    setCommunityAnswer("");
+    setCommunityStreaming(false);
+    setCommunityError("");
     setSearchError("");
     answerRef.current = "";
+    communityRef.current = "";
     const scope = activeGameId && !searchAllGames ? activeGameId : undefined;
 
     if (!answerMode) {
@@ -373,7 +388,25 @@ export default function App() {
             setAnswer(answerRef.current);
           },
           onError: (message) => setSearchError(message),
-          onDone: () => setSearching(false),
+          onCommunityStart: () => {
+            communityRef.current = "";
+            setCommunityAnswer("");
+            setCommunityError("");
+            setCommunityStreaming(true);
+          },
+          onCommunityToken: (token) => {
+            communityRef.current += token;
+            setCommunityAnswer(communityRef.current);
+          },
+          onCommunityError: (message) => {
+            setCommunityError(message);
+            setCommunityStreaming(false);
+          },
+          onCommunityDone: () => setCommunityStreaming(false),
+          onDone: () => {
+            setSearching(false);
+            setCommunityStreaming(false);
+          },
         },
         controller.signal,
       );
@@ -587,6 +620,9 @@ export default function App() {
           answerMode={answerMode}
           asking={searching}
           answer={answer}
+          communityAnswer={communityAnswer}
+          communityStreaming={communityStreaming}
+          communityError={communityError}
           error={searchError}
           onOpenResult={openReaderForResult}
           onStop={stopAsking}
@@ -711,6 +747,9 @@ export default function App() {
               setResults([]);
               setMeta(null);
               setAnswer("");
+              setCommunityAnswer("");
+              setCommunityStreaming(false);
+              setCommunityError("");
               setSearchError("");
               conversationRef.current = [];
             }}

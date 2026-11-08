@@ -3291,3 +3291,40 @@ code {
     margin-top: 8px;
   }
 }
+
+/* Community (BGG forum) answer, shown under the official answer. */
+.community-answer {
+  background: var(--panel);
+  border-color: var(--forum-border);
+  box-shadow: none;
+}
+
+.community-head {
+  color: var(--forum);
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.community-head .spinner {
+  margin-left: auto;
+}
+
+.community-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--forum-border);
+  background: var(--forum-soft);
+  color: var(--forum);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+
+.community-error {
+  margin: 0 2px 8px;
+  color: var(--danger);
+  font-size: 12.5px;
+}

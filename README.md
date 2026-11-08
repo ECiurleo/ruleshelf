@@ -38,7 +38,8 @@ docker compose up -d      # then open http://localhost:8080
   first visit.
 - **Optional BGG forums.** *BGG forums* is on by default; switch it off to skip it. It adds BoardGameGeek thread snippets
   from a web search. Forum results are highlighted as unofficial, while rulebook excerpts are always
-  authoritative and ranked first. No BGG API token is required: only the question and game title go to
+  authoritative and ranked first, and the AI writes a separate **Community Answer** from the threads
+  underneath the official answer. No BGG API token is required: only the question and game title go to
   the search engine, and only public thread snippets are used.
 - **Bring your own model.** Built-in support for **Ollama** (free/local), **OpenAI/ChatGPT**,
   **Anthropic Claude**, **DeepSeek** and **Qwen/DashScope**, plus any OpenAI-compatible endpoint

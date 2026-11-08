@@ -93,7 +93,7 @@ def _citation_label(result: dict) -> str:
     return label_prefix + label
 
 
-def build_context(results: Sequence[dict]) -> tuple[str, list[dict]]:
+def build_context(results: Sequence[dict], start_ref: int = 1) -> tuple[str, list[dict]]:
     """Build the citation-numbered context, keeping forum snippets in budget.
 
     Rulebook excerpts stay first and authoritative, but they must not consume
@@ -116,11 +116,12 @@ def build_context(results: Sequence[dict]) -> tuple[str, list[dict]]:
             return
         if len(text) > MAX_CHUNK_CHARS:
             text = text[:MAX_CHUNK_CHARS].rsplit(" ", 1)[0] + " …"
-        block = f"[{len(used) + 1}] {_citation_label(result)}\n{text}"
+        ref = start_ref + len(used)
+        block = f"[{ref}] {_citation_label(result)}\n{text}"
         if total + len(block) > budget and used:
             return
         blocks.append(block)
-        used.append({**result, "ref": len(used) + 1})
+        used.append({**result, "ref": ref})
         total += len(block)
 
     for result in rules:
@@ -171,6 +172,45 @@ def build_messages(
         content = (turn.get("content") or "").strip()
         if role in {"user", "assistant"} and content:
             messages.append({"role": role, "content": content[:4000]})
+    messages.append({"role": "user", "content": prompt})
+    return messages, used
+
+
+def build_community_messages(
+    conn: sqlite3.Connection,
+    query: str,
+    results: Sequence[dict],
+    history: Sequence[dict] | None = None,
+    start_ref: int = 1,
+) -> tuple[list[dict], list[dict]]:
+    """Prompt for a second, clearly unofficial answer drawn from BGG threads.
+
+    ``start_ref`` keeps citation numbers aligned with the combined source list
+    shown under the answer, so ``[n]`` opens the right thread card.
+    """
+    context, used = build_context(results, start_ref=start_ref)
+    if not context:
+        return [], []
+
+    prompt = (
+        "The numbered excerpts below are unofficial BoardGameGeek forum posts, "
+        "not rules text. They are being shown to the reader as a separate "
+        "community answer underneath the official rulebook answer.\n\n"
+        f"{context}\n\n"
+        f"Question: {query}\n\n"
+        "Answer using only these forum posts. Start with the community consensus, "
+        "then note meaningful disagreement or common house rules. Cite the excerpt "
+        "number in square brackets after each claim. Never present forum opinion as "
+        "an official rule, and do not repeat the rulebook answer. If the posts do "
+        "not answer the question, say so briefly."
+    )
+
+    messages: list[dict] = [{"role": "system", "content": system_prompt(conn)}]
+    for turn in (history or [])[-4:]:
+        role = turn.get("role")
+        content = (turn.get("content") or "").strip()
+        if role in {"user", "assistant"} and content:
+            messages.append({"role": role, "content": content[:3000]})
     messages.append({"role": "user", "content": prompt})
     return messages, used
 

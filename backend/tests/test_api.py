@@ -538,6 +538,37 @@ def test_rag_keeps_forum_excerpts_when_rulebooks_fill_the_context():
     assert "BGG FORUM (unofficial)" in context
 
 
+def test_community_answer_uses_global_reference_numbers():
+    from app.db import db
+    from app.services.rag import build_community_messages
+
+    forum = {
+        "source_type": "bgg",
+        "url": "https://boardgamegeek.com/thread/321/rules-question",
+        "document": {
+            "id": "",
+            "title": "Rules question",
+            "role_label": "BGG forum",
+            "overrides": False,
+        },
+        "game": {"title": "Earthborne Rangers"},
+        "page_start": None,
+        "page_end": None,
+        "text": "The community resolves this during the travel phase.",
+    }
+
+    with db() as conn:
+        messages, used = build_community_messages(
+            conn, "When does this resolve?", [forum], start_ref=4
+        )
+
+    assert used and used[0]["ref"] == 4
+    prompt = messages[-1]["content"]
+    assert "[4] BGG FORUM (unofficial)" in prompt
+    assert "unofficial BoardGameGeek forum posts" in prompt
+    assert "do not repeat the rulebook answer" in prompt
+
+
 def test_unsupported_upload_rejected(client, game):
     response = client.post(
         "/api/documents",

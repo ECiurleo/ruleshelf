@@ -16,7 +16,12 @@ from app.providers import Provider, ProviderConfig, build_provider
 from app.providers.base import ProviderError
 from app.services.bgg import search_bgg
 from app.services.embeddings import resolve_embedding
-from app.services.rag import build_messages, references_markdown, rewrite_queries
+from app.services.rag import (
+    build_community_messages,
+    build_messages,
+    references_markdown,
+    rewrite_queries,
+)
 from app.services.search import (
     SearchFilters,
     build_match_query,
@@ -262,9 +267,18 @@ def ask(payload: AskRequest):
                     "title": game_title or "BoardGameGeek",
                     "game_type": game_row["game_type"] if game_row else "other",
                 }
-            results = results + bgg_results
 
+        # The official answer uses rulebooks only; forum posts get their own
+        # answer underneath so readers can tell the two apart.
         messages, used = build_messages(conn, payload.query, results, payload.history)
+        community_messages, community_used = build_community_messages(
+            conn,
+            payload.query,
+            bgg_results,
+            payload.history,
+            start_ref=len(used) + 1,
+        )
+        all_used = used + community_used
         temperature = (
             payload.temperature
             if payload.temperature is not None
@@ -276,7 +290,7 @@ def ask(payload: AskRequest):
         yield _sse(
             "sources",
             {
-                "sources": [_public_result(result) for result in used],
+                "sources": [_public_result(result) for result in all_used],
                 "mode_used": mode_used,
                 "note": note,
                 "provider": provider_name,
@@ -309,6 +323,45 @@ def ask(payload: AskRequest):
             references = references_markdown(used, refs=cited or None)
             if references:
                 yield _sse("token", {"t": references})
+
+        if community_used and community_messages:
+            ref_start = community_used[0]["ref"]
+            ref_end = community_used[-1]["ref"]
+            yield _sse(
+                "community_start",
+                {"count": len(community_used), "ref_start": ref_start},
+            )
+            community_answered = False
+            community_buffer: list[str] = []
+            try:
+                for token in provider.chat(
+                    community_messages, model, temperature, max_tokens=900
+                ):
+                    community_answered = True
+                    community_buffer.append(token)
+                    yield _sse("community_token", {"t": token})
+            except ProviderError as exc:
+                yield _sse("community_error", {"message": exc.message})
+            except Exception as exc:  # noqa: BLE001 - stream must end cleanly
+                yield _sse(
+                    "community_error",
+                    {"message": f"Community answer failed: {exc}"},
+                )
+            if community_answered:
+                cited = sorted(
+                    {
+                        int(match)
+                        for match in re.findall(
+                            r"\[(\d{1,2})\]", "".join(community_buffer)
+                        )
+                        if ref_start <= int(match) <= ref_end
+                    }
+                )
+                references = references_markdown(community_used, refs=cited or None)
+                if references:
+                    yield _sse("community_token", {"t": references})
+            yield _sse("community_done", {})
+
         yield _sse("done", {})
 
     return StreamingResponse(
