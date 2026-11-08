@@ -124,7 +124,7 @@ DEFAULT_SETTINGS = {
     "embedding_provider": "",
     "embedding_model": "",
     "rag_top_k": "10",
-    "rag_temperature": "0.2",
+    "rag_temperature": "0.1",
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
 }
 

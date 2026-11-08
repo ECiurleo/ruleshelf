@@ -70,8 +70,15 @@ def build_messages(
     if not context:
         context = "(No excerpts were retrieved from the library.)"
 
+    errata = any(result["document"].get("overrides") for result in results)
+    priority = (
+        "IMPORTANT: excerpts marked ERRATA are official corrections that supersede "
+        "conflicting core rules. Use the errata text as the current rule.\n\n"
+        if errata
+        else ""
+    )
     prompt = (
-        "The numbered excerpts below come from the user's rulebooks.\n\n"
+        f"{priority}The numbered excerpts below come from the user's rulebooks.\n\n"
         f"{context}\n\n"
         f"Question: {query}\n\n"
         "Answer using only these excerpts, citing the excerpt number in square "

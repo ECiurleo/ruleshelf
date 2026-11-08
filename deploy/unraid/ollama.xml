@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Ollama</Name>
+  <Repository>ollama/ollama:latest</Repository>
+  <Registry>https://hub.docker.com/r/ollama/ollama</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <MyMAC/>
+  <Shell>bash</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/ollama/ollama/issues</Support>
+  <Project>https://ollama.com</Project>
+  <ReadMe>Local LLM runtime for Ruleshelf. Models live in /mnt/user/Data/ollama. Pull nomic-embed-text and llama3.1:8b-instruct-q4_K_M after first start. Ruleshelf reaches it at http://host.docker.internal:11434.</ReadMe>
+  <Overview>Ollama - local models for Ruleshelf semantic search and cited answers.</Overview>
+  <Category>Tools:</Category>
+  <WebUI>http://192.168.2.252:11434/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/ECiurleo/ruleshelf/main/deploy/unraid/ollama.xml</TemplateURL>
+  <ExtraParams>--init</ExtraParams>
+  <PostArgs/>
+  <CPUset/>
+  <DateInstalled/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires/>
+  <Config Name="API" Target="11434" Default="11434" Mode="tcp" Description="Ollama API (Ruleshelf points here)" Type="Port" Display="always" Required="true" Mask="false">11434</Config>
+  <Config Name="Models" Target="/root/.ollama" Default="/root/.ollama" Mode="rw" Description="Model cache and Ollama config" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/Data/ollama</Config>
+  <Config Name="Keep alive" Target="OLLAMA_KEEP_ALIVE" Default="30m" Mode="" Description="How long a model stays in RAM between requests" Type="Variable" Display="advanced" Required="false" Mask="false">30m</Config>
+</Container>

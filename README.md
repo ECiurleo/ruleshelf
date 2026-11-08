@@ -161,14 +161,39 @@ Keyword search works with no configuration at all. Meaning search and *Ask AI* n
 
 **Option A — local and free (Ollama)**
 
+Run Ollama as a container next to Ruleshelf (or install it natively):
+
 ```bash
-ollama pull nomic-embed-text     # embeddings, ~275 MB
-ollama pull llama3.2             # a chat model, optional
+docker run -d --name Ollama --restart unless-stopped \
+  -p 11434:11434 \
+  -v /mnt/user/Data/ollama:/root/.ollama \
+  ollama/ollama:latest
+
+docker exec Ollama ollama pull nomic-embed-text
+docker exec Ollama ollama pull llama3.1:8b-instruct-q4_K_M
+# optional, slower but better on tricky rules:
+docker exec Ollama ollama pull qwen2.5:14b-instruct-q4_K_M
 ```
 
-In Ruleshelf: **Settings → AI providers → Ollama**, set the base URL and models, **Save**, then
-**Load models → Test**. For the compose setup the URL is already
+In Ruleshelf: **Settings → AI providers → Ollama**, set the base URL, chat model and embedding
+model, **Save**, then **Load models → Test**. For the compose setup the URL is already
 `http://host.docker.internal:11434`. If Ollama runs on another machine, point the URL there.
+
+**Which local model?** Ruleshelf sends several long excerpts, so models need enough context (the
+Ollama driver requests 8192 tokens). Measured on an 8-core Ryzen 7 5825U with **no GPU**:
+
+| Model | Download | RAM | Typical answer |
+| --- | --- | --- | --- |
+| `nomic-embed-text` | 274 MB | ~1 GB | embeddings, under a second |
+| `llama3.1:8b-instruct-q4_K_M` | 4.9 GB | ~6 GB | 15–35 s |
+| `qwen2.5:14b-instruct-q4_K_M` | 9.0 GB | ~11 GB | 60–90 s |
+
+The 8B model is the recommended default. The 14B model handled conflicting errata more reliably
+in testing; a 7B model was fast but confused errata with superseded core rules. If you have no
+spare RAM, run the 8B, or point Ruleshelf at a hosted provider instead.
+
+Ollama's default context window is 2048 tokens, which truncates RAG prompts. Ruleshelf requests
+8192 per chat request, and keeps the model loaded for 30 minutes.
 
 **Option B — hosted**
 

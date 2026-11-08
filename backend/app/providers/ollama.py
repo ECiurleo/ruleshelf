@@ -64,7 +64,14 @@ class OllamaProvider(Provider):
             "model": model,
             "messages": list(messages),
             "stream": True,
-            "options": {"temperature": temperature, "num_predict": max_tokens},
+            # Ruleshelf sends several long excerpts; the Ollama default of 2048
+            # tokens would silently truncate them. Keep the model warm too.
+            "keep_alive": "30m",
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+                "num_ctx": 8192,
+            },
         }
         try:
             with httpx.Client(timeout=TIMEOUT) as client:
