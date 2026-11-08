@@ -24,6 +24,7 @@ export function GameView({
   onCampaignEdit,
   onCampaignDelete,
   onAssignCampaign,
+  onScenarioOrder,
   onOpenDoc,
   onReindexDoc,
   onDeleteDoc,
@@ -41,6 +42,7 @@ export function GameView({
   onCampaignEdit: (campaign: Campaign) => void;
   onCampaignDelete: (campaign: Campaign) => void;
   onAssignCampaign: (doc: Document, campaignId: string | null) => void;
+  onScenarioOrder: (doc: Document, order: number) => void;
   onOpenDoc: (doc: Document) => void;
   onReindexDoc: (doc: Document) => void;
   onDeleteDoc: (doc: Document) => void;
@@ -53,6 +55,23 @@ export function GameView({
   const chooseView = (next: "grid" | "list") => {
     setView(next);
     localStorage.setItem("ruleshelf:docView", next);
+  };
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try {
+      return new Set<string>(JSON.parse(localStorage.getItem("ruleshelf:collapsedCampaigns") ?? "[]"));
+    } catch {
+      return new Set<string>();
+    }
+  });
+  const toggleCollapsed = (key: string) => {
+    setCollapsed((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      localStorage.setItem("ruleshelf:collapsedCampaigns", JSON.stringify([...next]));
+      return next;
+    });
   };
 
   const roles = gameType?.roles ?? [{ id: "core", label: "Core rules" }];
@@ -202,6 +221,10 @@ export function GameView({
                           campaigns={campaigns}
                           view={view}
                           embeddingConfigured={embeddingConfigured}
+                          collapsed={collapsed.has(group.campaign?.id ?? "ungrouped")}
+                          onToggleCollapsed={() =>
+                            toggleCollapsed(group.campaign?.id ?? "ungrouped")
+                          }
                           onUpload={(campaignId) => onUpload("campaign", campaignId)}
                           onEdit={group.campaign ? onCampaignEdit : undefined}
                           onDelete={group.campaign ? onCampaignDelete : undefined}
@@ -210,6 +233,7 @@ export function GameView({
                           onDeleteDoc={onDeleteDoc}
                           onRetitleDoc={onRetitleDoc}
                           onAssignCampaign={onAssignCampaign}
+                          onScenarioOrder={onScenarioOrder}
                         />
                       ))}
                     </div>
@@ -218,11 +242,11 @@ export function GameView({
                       <span className="empty-mark">
                         <Icon name="book" size={24} />
                       </span>
-                      <h2>Group campaigns into stages</h2>
+                      <h2>Group campaigns into scenarios</h2>
                       <p>
-                        Create a campaign such as <em>The Enemy Within</em>, then add each stage
-                        as its own document. Existing campaign books can be assigned from each
-                        book's campaign menu.
+                        Create a campaign such as <em>The Enemy Within</em>, then add each
+                        scenario as its own document. Existing campaign books can be assigned
+                        from each book's campaign menu.
                       </p>
                       <button className="button primary" onClick={onCampaignCreate}>
                         <Icon name="plus" size={16} /> New campaign

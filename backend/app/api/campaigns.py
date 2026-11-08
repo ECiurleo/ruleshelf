@@ -1,4 +1,4 @@
-"""Campaign groups: a named container for campaign stages/documents."""
+"""Campaign groups: a named container for campaign scenarios/documents."""
 
 from __future__ import annotations
 

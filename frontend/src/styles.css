@@ -1142,6 +1142,45 @@ code {
   gap: 5px;
 }
 
+.scenario-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-deep);
+  color: var(--muted);
+  font-size: 10px;
+  pointer-events: auto;
+}
+
+.scenario-order input {
+  width: 34px;
+  padding: 1px 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.scenario-order input::-webkit-outer-spin-button,
+.scenario-order input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.collapse-toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.collapse-toggle svg.open {
+  transform: rotate(90deg);
+}
+
 .campaign-select {
   max-width: 150px;
   padding: 1px 5px;

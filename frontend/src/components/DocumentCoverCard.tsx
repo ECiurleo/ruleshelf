@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Campaign, Document } from "../lib/api";
 import { plural } from "../lib/api";
 import { Icon } from "./Icon";
+import { ScenarioOrderInput } from "./ScenarioOrderInput";
 
 const STATUS_LABEL: Record<Document["status"], string> = {
   pending: "Queued",
@@ -14,6 +15,7 @@ export function DocumentCoverCard({
   document: doc,
   campaigns,
   onCampaignChange,
+  onOrderChange,
   onOpen,
   onReindex,
   onDelete,
@@ -22,6 +24,7 @@ export function DocumentCoverCard({
   document: Document;
   campaigns?: Campaign[];
   onCampaignChange?: (campaignId: string | null) => void;
+  onOrderChange?: (order: number) => void;
   onOpen: () => void;
   onReindex: () => void;
   onDelete: () => void;
@@ -102,6 +105,9 @@ export function DocumentCoverCard({
         </div>
 
         <div className="cover-info">
+          {doc.role === "campaign" && onOrderChange && (
+            <ScenarioOrderInput order={doc.sort_order} onSave={onOrderChange} />
+          )}
           {doc.role === "campaign" && campaigns && campaigns.length > 0 && onCampaignChange && (
             <select
               className="cover-campaign"

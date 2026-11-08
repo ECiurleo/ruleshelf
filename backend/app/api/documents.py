@@ -26,7 +26,7 @@ class DocumentUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     role: str | None = None
     campaign_id: str | None = None
-    sort_order: int | None = None
+    sort_order: int | None = Field(default=None, ge=0)
 
 
 def _roles_for(conn, game_id: str) -> list[dict]:

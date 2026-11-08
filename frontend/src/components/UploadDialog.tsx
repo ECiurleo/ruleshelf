@@ -162,7 +162,7 @@ export function UploadDialog({
           </select>
           {campaigns.length === 0 && (
             <small className="fine-print">
-              Create a campaign from the game view first to file this stage.
+              Create a campaign from the game view first to file this scenario.
             </small>
           )}
         </label>

@@ -221,9 +221,11 @@ def test_campaign_groups_and_stages(client, game):
     ] == 0
 
     moved = client.patch(
-        f"/api/documents/{stage['id']}", json={"campaign_id": campaign_id}
+        f"/api/documents/{stage['id']}",
+        json={"campaign_id": campaign_id, "sort_order": 4},
     ).json()
     assert moved["campaign_title"] == "The Enemy Within"
+    assert moved["sort_order"] == 4
 
     # Deleting a campaign ungroups its stages instead of deleting them.
     assert client.delete(f"/api/campaigns/{campaign_id}").json()["ungrouped"] == 1

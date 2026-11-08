@@ -424,6 +424,15 @@ export default function App() {
     }
   };
 
+  const setScenarioOrder = async (doc: Document, order: number) => {
+    try {
+      await api.updateDocument(doc.id, { sort_order: order });
+      await refreshDocuments(activeGameId);
+    } catch (err) {
+      notify((err as Error).message, "error");
+    }
+  };
+
   const deleteCampaign = async (campaign: Campaign) => {
     if (
       !window.confirm(
@@ -500,6 +509,7 @@ export default function App() {
           onCampaignEdit={(campaign) => setCampaignDialog({ campaign })}
           onCampaignDelete={deleteCampaign}
           onAssignCampaign={assignCampaign}
+          onScenarioOrder={setScenarioOrder}
           onOpenDoc={openReaderForDocument}
           onReindexDoc={reindexDocument}
           onDeleteDoc={deleteDocument}

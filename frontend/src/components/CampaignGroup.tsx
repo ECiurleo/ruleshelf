@@ -10,6 +10,8 @@ export function CampaignGroup({
   campaigns,
   view,
   embeddingConfigured,
+  collapsed,
+  onToggleCollapsed,
   onUpload,
   onEdit,
   onDelete,
@@ -18,12 +20,15 @@ export function CampaignGroup({
   onDeleteDoc,
   onRetitleDoc,
   onAssignCampaign,
+  onScenarioOrder,
 }: {
   campaign: Campaign | null;
   documents: Document[];
   campaigns: Campaign[];
   view: "grid" | "list";
   embeddingConfigured: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onUpload: (campaignId: string | null) => void;
   onEdit?: (campaign: Campaign) => void;
   onDelete?: (campaign: Campaign) => void;
@@ -32,18 +37,23 @@ export function CampaignGroup({
   onDeleteDoc: (doc: Document) => void;
   onRetitleDoc: (doc: Document, title: string) => void;
   onAssignCampaign: (doc: Document, campaignId: string | null) => void;
+  onScenarioOrder: (doc: Document, order: number) => void;
 }) {
+  const ordered = [...documents].sort(
+    (a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title),
+  );
   const content = (
     <>
       {documents.length ? (
         <div className={view === "grid" ? "document-grid" : "document-list"}>
-          {documents.map((doc) =>
+          {ordered.map((doc) =>
             view === "grid" ? (
               <DocumentCoverCard
                 key={doc.id}
                 document={doc}
                 campaigns={campaigns}
                 onCampaignChange={(campaignId) => onAssignCampaign(doc, campaignId)}
+                onOrderChange={(order) => onScenarioOrder(doc, order)}
                 onOpen={() => onOpenDoc(doc)}
                 onReindex={() => onReindexDoc(doc)}
                 onDelete={() => onDeleteDoc(doc)}
@@ -56,6 +66,7 @@ export function CampaignGroup({
                 embeddingConfigured={embeddingConfigured}
                 campaigns={campaigns}
                 onCampaignChange={(campaignId) => onAssignCampaign(doc, campaignId)}
+                onOrderChange={(order) => onScenarioOrder(doc, order)}
                 onOpen={() => onOpenDoc(doc)}
                 onReindex={() => onReindexDoc(doc)}
                 onDelete={() => onDeleteDoc(doc)}
@@ -67,7 +78,7 @@ export function CampaignGroup({
       ) : campaign ? (
         <button className="dropzone small" onClick={() => onUpload(campaign.id)}>
           <Icon name="plus" size={18} />
-          Add a stage to {campaign.title}
+          Add a scenario to {campaign.title}
         </button>
       ) : null}
     </>
@@ -81,9 +92,19 @@ export function CampaignGroup({
             <h3>Ungrouped campaign documents</h3>
             <p className="campaign-sub">Choose a campaign on each book to file it.</p>
           </div>
-          <span className="role-count">{plural(documents.length, "book")}</span>
+          <div className="campaign-head-actions">
+            <span className="role-count">{plural(documents.length, "book")}</span>
+            <button
+              className="button ghost small collapse-toggle"
+              onClick={onToggleCollapsed}
+              aria-expanded={!collapsed}
+            >
+              <Icon name="chevron" size={14} className={collapsed ? "" : "open"} />
+              {collapsed ? "Show" : "Hide"} scenarios
+            </button>
+          </div>
         </div>
-        {content}
+        {collapsed ? null : content}
       </section>
     );
   }
@@ -97,8 +118,16 @@ export function CampaignGroup({
         </div>
         <div className="campaign-head-actions">
           <span className="role-count">{plural(documents.length, "book")}</span>
+          <button
+            className="button ghost small collapse-toggle"
+            onClick={onToggleCollapsed}
+            aria-expanded={!collapsed}
+          >
+            <Icon name="chevron" size={14} className={collapsed ? "" : "open"} />
+            {collapsed ? "Show" : "Hide"} scenarios
+          </button>
           <button className="button ghost small" onClick={() => onUpload(campaign.id)}>
-            <Icon name="plus" size={15} /> Add stage
+            <Icon name="plus" size={15} /> Add scenario
           </button>
           {onEdit && onDelete && (
             <>
@@ -122,7 +151,7 @@ export function CampaignGroup({
           )}
         </div>
       </div>
-      {content}
+      {collapsed ? null : content}
     </section>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Campaign, Document } from "../lib/api";
 import { formatBytes, formatDate, plural } from "../lib/api";
 import { Icon } from "./Icon";
+import { ScenarioOrderInput } from "./ScenarioOrderInput";
 
 const STATUS_LABEL: Record<Document["status"], string> = {
   pending: "Queued",
@@ -15,6 +16,7 @@ export function DocumentCard({
   embeddingConfigured,
   campaigns,
   onCampaignChange,
+  onOrderChange,
   onOpen,
   onReindex,
   onDelete,
@@ -24,6 +26,7 @@ export function DocumentCard({
   embeddingConfigured: boolean;
   campaigns?: Campaign[];
   onCampaignChange?: (campaignId: string | null) => void;
+  onOrderChange?: (order: number) => void;
   onOpen: () => void;
   onReindex: () => void;
   onDelete: () => void;
@@ -74,6 +77,9 @@ export function DocumentCard({
                 ? "embedded"
                 : `${doc.embedded_chunks}/${doc.chunk_count} embedded`}
             </span>
+          )}
+          {doc.role === "campaign" && onOrderChange && (
+            <ScenarioOrderInput order={doc.sort_order} onSave={onOrderChange} />
           )}
           {doc.role === "campaign" && campaigns && campaigns.length > 0 && onCampaignChange && (
             <select

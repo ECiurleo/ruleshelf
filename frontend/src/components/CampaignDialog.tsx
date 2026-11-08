@@ -47,7 +47,7 @@ export function CampaignDialog({
   return (
     <Modal
       title={campaign ? "Edit campaign" : "New campaign"}
-      subtitle="Group the stages or books that belong to one campaign."
+      subtitle="Group the scenarios or books that belong to one campaign."
       onClose={onClose}
       footer={
         <>
