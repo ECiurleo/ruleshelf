@@ -133,7 +133,8 @@ def build_messages(
         "brackets after every rule statement. Put the direct answer in the first "
         "sentence. When the excerpts give a formula or table, do the arithmetic "
         "(for example Walk = Movement x 2 and Run = Movement x 4) and state the "
-        "numbers. When asked to compare, use the values found in the excerpts. "
+        "numbers. When the excerpts contain comparable entries (other species, "
+        "weapons, and so on), state the comparison explicitly with their values. "
         "If the excerpts do not answer it, say what is missing."
     )
 

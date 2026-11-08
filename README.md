@@ -210,10 +210,14 @@ Ollama driver requests 8192 tokens). Measured on an 8-core Ryzen 7 5825U with **
 | `llama3.1:8b-instruct-q4_K_M` | 4.9 GB | ~6 GB | 15–35 s |
 | `qwen2.5:14b-instruct-q4_K_M` | 9.0 GB | ~11 GB | 60–90 s |
 
-The **14B model is the default recommendation**: it correctly treated errata as replacing the
+The **14B model is the best local choice**: it correctly treated errata as replacing the
 superseded core rule in testing. The 8B is roughly twice as fast but occasionally mixed old core
 rows into errata answers. A 7B model was faster still but unreliable on precedence. If you have no
 spare RAM, run the 8B, or point Ruleshelf at a hosted provider instead.
+
+For comparison, the same "how fast can a dwarf run" question on a WFRP 4e library took **~2–3
+minutes** locally with Qwen2.5 14B and **~4 seconds** with hosted DeepSeek `deepseek-chat`. Hosted
+models send the retrieved excerpts to the provider; Ollama keeps everything on your server.
 
 Ollama's default context window is 2048 tokens, which truncates RAG prompts. Ruleshelf requests
 8192 per chat request, and keeps the model loaded for 30 minutes.
