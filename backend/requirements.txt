@@ -1,5 +1,5 @@
 fastapi>=0.115,<1
-uvicorn[standard]>=0.32,<1
+uvicorn[standard]>=0.54.0,<1
 python-multipart>=0.0.33
 pymupdf>=2.1
 ebooklib>=0.18
