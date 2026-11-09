@@ -4,6 +4,13 @@ Import `ruleshelf.xml` through **Docker → Add Container → Template** (or cop
 to `/boot/config/plugins/dockerMan/templates-user/`), then adjust the port and
 host path.
 
+Create and update the container from the Unraid Docker page. Containers started
+with a bare `docker run` appear as **3rd Party** because dockerMan identifies its
+own containers by the `net.unraid.docker.managed=dockerman` label (plus the
+template in `templates-user`). If you recreate one from the command line, pass
+that label and the icon/WebUI labels shown in the template; otherwise use the
+template's **Edit**/**Apply** action.
+
 Recommended layout on the array:
 
 ```

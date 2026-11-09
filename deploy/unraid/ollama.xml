@@ -14,6 +14,7 @@
   <Overview>Ollama - local models for Ruleshelf semantic search and cited answers.</Overview>
   <Category>Tools:</Category>
   <WebUI>http://192.168.2.252:11434/</WebUI>
+  <Icon>https://ollama.com/public/ollama.png</Icon>
   <TemplateURL>https://raw.githubusercontent.com/ECiurleo/ruleshelf/main/deploy/unraid/ollama.xml</TemplateURL>
   <ExtraParams>--init</ExtraParams>
   <PostArgs/>

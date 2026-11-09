@@ -14,6 +14,7 @@
   <Overview>Ruleshelf - rulebook search and cited answers for RPGs, board games and wargames.</Overview>
   <Category>Tools: Productivity:</Category>
   <WebUI>http://192.168.2.252:8787/</WebUI>
+  <Icon>https://raw.githubusercontent.com/ECiurleo/ruleshelf/main/deploy/unraid/ruleshelf-icon.svg</Icon>
   <TemplateURL>https://raw.githubusercontent.com/ECiurleo/ruleshelf/main/deploy/unraid/ruleshelf.xml</TemplateURL>
   <ExtraParams>--add-host=host.docker.internal:host-gateway --init --stop-timeout 30</ExtraParams>
   <PostArgs/>
