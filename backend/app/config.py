@@ -29,6 +29,7 @@ def _data_dir() -> Path:
 DATA_DIR = _data_dir()
 FILES_DIR = DATA_DIR / "files"
 THUMBNAILS_DIR = DATA_DIR / "thumbnails"
+UPLOADS_DIR = DATA_DIR / "uploads"
 DB_PATH = DATA_DIR / "ruleshelf.db"
 
 IN_CONTAINER = Path("/.dockerenv").exists()
@@ -58,3 +59,4 @@ CHUNK_OVERLAP = int(os.environ.get("RULESHELF_CHUNK_OVERLAP", "160"))
 
 FILES_DIR.mkdir(parents=True, exist_ok=True)
 THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)

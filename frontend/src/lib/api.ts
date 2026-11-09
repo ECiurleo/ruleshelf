@@ -213,6 +213,30 @@ export class ApiError extends Error {
   }
 }
 
+async function fail(response: Response): Promise<never> {
+  let message = response.statusText || `Request failed (${response.status})`;
+  let parsed = false;
+  try {
+    const body = await response.json();
+    message = body.detail ?? body.message ?? message;
+    if (Array.isArray(message)) {
+      message = message.map((item: { msg?: string }) => item.msg ?? String(item)).join("; ");
+    }
+    parsed = true;
+  } catch {
+    /* not JSON */
+  }
+  if (response.status === 413 && !parsed) {
+    // The app always answers 413 with JSON, so a bare 413 comes from a proxy.
+    // Large files are chunked, so this means even one small request was refused.
+    message =
+      "Upload rejected as too large (413) by a proxy in front of Ruleshelf. " +
+      "Raise its body-size limit (nginx: client_max_body_size 512m) or check " +
+      "RULESHELF_MAX_UPLOAD_MB.";
+  }
+  throw new ApiError(String(message), response.status);
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   if (init.body && !(init.body instanceof FormData)) {
@@ -223,27 +247,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     window.dispatchEvent(new Event("ruleshelf:unauthorized"));
   }
   if (!response.ok) {
-    let message = response.statusText || `Request failed (${response.status})`;
-    let parsed = false;
-    try {
-      const body = await response.json();
-      message = body.detail ?? body.message ?? message;
-      if (Array.isArray(message)) {
-        message = message.map((item: { msg?: string }) => item.msg ?? String(item)).join("; ");
-      }
-      parsed = true;
-    } catch {
-      /* not JSON */
-    }
-    if (response.status === 413 && !parsed) {
-      // The app always answers 413 with JSON, so a bare 413 comes from a
-      // proxy in front of it (Cloudflare caps requests at 100 MB).
-      message =
-        "Upload rejected as too large (413) before it reached Ruleshelf. " +
-        "Check the reverse proxy's body-size limit (Cloudflare: 100 MB) and " +
-        "RULESHELF_MAX_UPLOAD_MB, or upload directly on the local network.";
-    }
-    throw new ApiError(String(message), response.status);
+    await fail(response);
   }
   return (await response.json()) as T;
 }
@@ -323,6 +327,60 @@ export const api = {
     if (scenarioId) form.set("scenario_id", scenarioId);
     form.set("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
+  },
+  /**
+   * Upload in small pieces so a proxy with a per-request body limit
+   * (Cloudflare: 100 MB) never sees the whole book at once.
+   */
+  uploadDocumentChunked: async (
+    gameId: string,
+    role: string,
+    file: File,
+    options: {
+      title?: string;
+      campaignId?: string | null;
+      scenarioId?: string | null;
+      onProgress?: (fraction: number) => void;
+    } = {},
+  ) => {
+    const init = await post<{ upload_id: string; chunk_size: number; size: number }>(
+      "/api/documents/uploads",
+      {
+        game_id: gameId,
+        role,
+        title: options.title ?? "",
+        campaign_id: options.campaignId ?? null,
+        scenario_id: options.scenarioId ?? null,
+        filename: file.name,
+        size: file.size,
+        content_type: file.type || "application/octet-stream",
+      },
+    );
+    try {
+      let offset = 0;
+      while (offset < file.size) {
+        const end = Math.min(offset + init.chunk_size, file.size);
+        const response = await fetch(
+          `/api/documents/uploads/${init.upload_id}?offset=${offset}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/octet-stream" },
+            body: file.slice(offset, end),
+          },
+        );
+        if (!response.ok) await fail(response);
+        offset = end;
+        options.onProgress?.(offset / file.size);
+      }
+      return await request<Document>(`/api/documents/uploads/${init.upload_id}/complete`, {
+        method: "POST",
+      });
+    } catch (err) {
+      await fetch(`/api/documents/uploads/${init.upload_id}`, { method: "DELETE" }).catch(
+        () => undefined,
+      );
+      throw err;
+    }
   },
   updateDocument: (
     id: string,
