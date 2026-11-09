@@ -3328,3 +3328,27 @@ code {
   color: var(--danger);
   font-size: 12.5px;
 }
+
+/* Campaign/scenario metadata shown below the metadata row in list view.
+   These values are read-only here; editing happens in the document dialog. */
+.doc-submeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-top: 5px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.doc-submeta span:first-child {
+  color: var(--accent-strong);
+}
+
+.cover-info .cover-submeta {
+  color: rgba(234, 231, 224, 0.78);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  margin: 0 0 5px;
+}

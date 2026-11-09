@@ -1,8 +1,7 @@
 import { useState } from "react";
-import type { Campaign, Document } from "../lib/api";
+import type { Document } from "../lib/api";
 import { plural } from "../lib/api";
 import { Icon } from "./Icon";
-import { ScenarioOrderInput } from "./ScenarioOrderInput";
 
 const STATUS_LABEL: Record<Document["status"], string> = {
   pending: "Queued",
@@ -13,33 +12,22 @@ const STATUS_LABEL: Record<Document["status"], string> = {
 
 export function DocumentCoverCard({
   document: doc,
-  campaigns,
   canWrite = true,
-  onCampaignChange,
-  onOrderChange,
   onOpen,
   onReindex,
   onDelete,
-  onRetitle,
+  onEdit,
 }: {
   document: Document;
-  campaigns?: Campaign[];
   canWrite?: boolean;
-  onCampaignChange?: (campaignId: string | null) => void;
-  onOrderChange?: (order: number) => void;
   onOpen: () => void;
   onReindex: () => void;
   onDelete: () => void;
-  onRetitle: (title: string) => void;
+  onEdit: () => void;
 }) {
   const [thumbFailed, setThumbFailed] = useState(false);
   const busy = doc.status === "pending" || doc.status === "processing";
   const failed = doc.status === "error";
-
-  const rename = () => {
-    const next = window.prompt("Document title", doc.title);
-    if (next && next.trim() && next.trim() !== doc.title) onRetitle(next.trim());
-  };
 
   return (
     <article
@@ -85,7 +73,7 @@ export function DocumentCoverCard({
             </a>
             {canWrite && (
               <>
-                <button className="icon-button" onClick={rename} title="Rename" aria-label="Rename">
+                <button className="icon-button" onClick={onEdit} title="Edit document" aria-label="Edit document">
                   <Icon name="edit" size={15} />
                 </button>
                 <button
@@ -111,25 +99,10 @@ export function DocumentCoverCard({
         </div>
 
         <div className="cover-info">
-          {canWrite && doc.role === "campaign" && onOrderChange && (
-            <ScenarioOrderInput order={doc.sort_order} onSave={onOrderChange} />
-          )}
-          {canWrite && doc.role === "campaign" && campaigns && campaigns.length > 0 && onCampaignChange && (
-            <select
-              className="cover-campaign"
-              value={doc.campaign_id ?? ""}
-              onChange={(event) => onCampaignChange(event.target.value || null)}
-              onClick={(event) => event.stopPropagation()}
-              onMouseDown={(event) => event.stopPropagation()}
-              title="Campaign"
-            >
-              <option value="">Ungrouped</option>
-              {campaigns.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.title}
-                </option>
-              ))}
-            </select>
+          {doc.role === "campaign" && (
+            <p className="cover-submeta">
+              {doc.campaign_title ?? "Ungrouped campaign"} · Scenario order {doc.sort_order}
+            </p>
           )}
           {doc.status !== "ready" && (
             <span className={`status-chip cover-status ${doc.status}`}>

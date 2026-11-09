@@ -7,7 +7,6 @@ import { DocumentCoverCard } from "./DocumentCoverCard";
 export function CampaignGroup({
   campaign,
   documents,
-  campaigns,
   view,
   embeddingConfigured,
   canWrite = true,
@@ -19,13 +18,10 @@ export function CampaignGroup({
   onOpenDoc,
   onReindexDoc,
   onDeleteDoc,
-  onRetitleDoc,
-  onAssignCampaign,
-  onScenarioOrder,
+  onEditDoc,
 }: {
   campaign: Campaign | null;
   documents: Document[];
-  campaigns: Campaign[];
   view: "grid" | "list";
   embeddingConfigured: boolean;
   canWrite?: boolean;
@@ -37,9 +33,7 @@ export function CampaignGroup({
   onOpenDoc: (doc: Document) => void;
   onReindexDoc: (doc: Document) => void;
   onDeleteDoc: (doc: Document) => void;
-  onRetitleDoc: (doc: Document, title: string) => void;
-  onAssignCampaign: (doc: Document, campaignId: string | null) => void;
-  onScenarioOrder: (doc: Document, order: number) => void;
+  onEditDoc: (doc: Document) => void;
 }) {
   const ordered = [...documents].sort(
     (a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title),
@@ -53,14 +47,11 @@ export function CampaignGroup({
               <DocumentCoverCard
                 key={doc.id}
                 document={doc}
-                campaigns={campaigns}
                 canWrite={canWrite}
-                onCampaignChange={(campaignId) => onAssignCampaign(doc, campaignId)}
-                onOrderChange={(order) => onScenarioOrder(doc, order)}
                 onOpen={() => onOpenDoc(doc)}
                 onReindex={() => onReindexDoc(doc)}
                 onDelete={() => onDeleteDoc(doc)}
-                onRetitle={(title) => onRetitleDoc(doc, title)}
+                onEdit={() => onEditDoc(doc)}
               />
             ) : (
               <DocumentCard
@@ -68,13 +59,10 @@ export function CampaignGroup({
                 document={doc}
                 embeddingConfigured={embeddingConfigured}
                 canWrite={canWrite}
-                campaigns={campaigns}
-                onCampaignChange={(campaignId) => onAssignCampaign(doc, campaignId)}
-                onOrderChange={(order) => onScenarioOrder(doc, order)}
                 onOpen={() => onOpenDoc(doc)}
                 onReindex={() => onReindexDoc(doc)}
                 onDelete={() => onDeleteDoc(doc)}
-                onRetitle={(title) => onRetitleDoc(doc, title)}
+                onEdit={() => onEditDoc(doc)}
               />
             ),
           )}

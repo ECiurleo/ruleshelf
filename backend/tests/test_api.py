@@ -795,6 +795,47 @@ def test_community_answer_uses_global_reference_numbers():
     assert "which you cannot see" in prompt
 
 
+def test_change_document_section_updates_chunks_and_campaign(client, game):
+    from app.db import db
+
+    document = upload_document(client, game["id"], role="other", title="One Day Missions")
+    wait_until_ready(client, document["id"])
+
+    moved = client.patch(
+        f"/api/documents/{document['id']}", json={"role": "campaign"}
+    ).json()
+    assert moved["role"] == "campaign"
+    with db() as conn:
+        chunk_roles = {
+            row["role"]
+            for row in conn.execute(
+                "SELECT role FROM chunks WHERE document_id = ?", (document["id"],)
+            )
+        }
+    assert chunk_roles == {"campaign"}
+
+    campaign = client.post(
+        f"/api/games/{game['id']}/campaigns",
+        json={"title": "One-Day Missions", "description": ""},
+    ).json()
+    assigned = client.patch(
+        f"/api/documents/{document['id']}",
+        json={"campaign_id": campaign["id"]},
+    ).json()
+    assert assigned["campaign_id"] == campaign["id"]
+
+    moved_back = client.patch(
+        f"/api/documents/{document['id']}", json={"role": "other"}
+    ).json()
+    assert moved_back["role"] == "other"
+    assert moved_back["campaign_id"] is None
+
+    invalid = client.patch(
+        f"/api/documents/{document['id']}", json={"role": "not-a-section"}
+    )
+    assert invalid.status_code == 400
+
+
 def test_unsupported_upload_rejected(client, game):
     response = client.post(
         "/api/documents",

@@ -22,6 +22,7 @@ import { AddGameDialog } from "./components/AddGameDialog";
 import { UploadDialog } from "./components/UploadDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { CampaignDialog } from "./components/CampaignDialog";
+import { EditDocumentDialog } from "./components/EditDocumentDialog";
 import { LoginPage } from "./components/LoginPage";
 import { ChangePasswordDialog } from "./components/ChangePasswordDialog";
 import { Icon } from "./components/Icon";
@@ -98,6 +99,7 @@ export default function App() {
   const [reader, setReader] = useState<ReaderTarget | null>(null);
   const [addGameOpen, setAddGameOpen] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null);
   const [uploadRole, setUploadRole] = useState<string | null>(null);
   const [uploadCampaignId, setUploadCampaignId] = useState<string | null>(null);
   const [campaignDialog, setCampaignDialog] = useState<{ campaign?: Campaign } | null>(null);
@@ -304,6 +306,7 @@ export default function App() {
     setCommunityStreaming(false);
     setCommunityError("");
     setSearchError("");
+    setEditingDoc(null);
   };
 
   const stopAsking = () => {
@@ -547,31 +550,13 @@ export default function App() {
     }
   };
 
-  const retitleDocument = async (doc: Document, title: string) => {
-    try {
-      await api.updateDocument(doc.id, { title });
-      await refreshDocuments(activeGameId);
-    } catch (err) {
-      notify((err as Error).message, "error");
-    }
-  };
-
-  const assignCampaign = async (doc: Document, campaignId: string | null) => {
-    try {
-      await api.updateDocument(doc.id, { campaign_id: campaignId });
-      await Promise.all([refreshDocuments(activeGameId), refreshCampaigns(activeGameId)]);
-    } catch (err) {
-      notify((err as Error).message, "error");
-    }
-  };
-
-  const setScenarioOrder = async (doc: Document, order: number) => {
-    try {
-      await api.updateDocument(doc.id, { sort_order: order });
-      await refreshDocuments(activeGameId);
-    } catch (err) {
-      notify((err as Error).message, "error");
-    }
+  const saveEditedDocument = async () => {
+    await Promise.all([
+      refreshDocuments(activeGameId),
+      refreshCampaigns(activeGameId),
+    ]);
+    await refreshLibrary();
+    setEditingDoc(null);
   };
 
   const deleteCampaign = async (campaign: Campaign) => {
@@ -674,12 +659,10 @@ export default function App() {
           onCampaignCreate={() => setCampaignDialog({})}
           onCampaignEdit={(campaign) => setCampaignDialog({ campaign })}
           onCampaignDelete={deleteCampaign}
-          onAssignCampaign={assignCampaign}
-          onScenarioOrder={setScenarioOrder}
           onOpenDoc={openReaderForDocument}
           onReindexDoc={reindexDocument}
           onDeleteDoc={deleteDocument}
-          onRetitleDoc={retitleDocument}
+          onEditDoc={(doc) => setEditingDoc(doc)}
         />
       );
     }
@@ -869,6 +852,17 @@ export default function App() {
             navigate(game.id);
             notify(`"${game.title}" added. Upload its core rules to begin.`, "ok");
           }}
+        />
+      )}
+
+      {editingDoc && isAdmin && (
+        <EditDocumentDialog
+          document={editingDoc}
+          gameType={activeGameType}
+          campaigns={campaigns}
+          onClose={() => setEditingDoc(null)}
+          onSaved={saveEditedDocument}
+          notify={notify}
         />
       )}
 

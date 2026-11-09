@@ -24,12 +24,10 @@ export function GameView({
   onCampaignCreate,
   onCampaignEdit,
   onCampaignDelete,
-  onAssignCampaign,
-  onScenarioOrder,
   onOpenDoc,
   onReindexDoc,
   onDeleteDoc,
-  onRetitleDoc,
+  onEditDoc,
 }: {
   game: Game;
   gameType: GameType | undefined;
@@ -43,12 +41,10 @@ export function GameView({
   onCampaignCreate: () => void;
   onCampaignEdit: (campaign: Campaign) => void;
   onCampaignDelete: (campaign: Campaign) => void;
-  onAssignCampaign: (doc: Document, campaignId: string | null) => void;
-  onScenarioOrder: (doc: Document, order: number) => void;
   onOpenDoc: (doc: Document) => void;
   onReindexDoc: (doc: Document) => void;
   onDeleteDoc: (doc: Document) => void;
-  onRetitleDoc: (doc: Document, title: string) => void;
+  onEditDoc: (doc: Document) => void;
 }) {
   const [view, setView] = useState<"grid" | "list">(() => {
     const saved = localStorage.getItem("ruleshelf:docView");
@@ -111,7 +107,7 @@ export function GameView({
     onOpen: () => onOpenDoc(doc),
     onReindex: () => onReindexDoc(doc),
     onDelete: () => onDeleteDoc(doc),
-    onRetitle: (title: string) => onRetitleDoc(doc, title),
+    onEdit: () => onEditDoc(doc),
   });
 
   return (
@@ -237,7 +233,6 @@ export function GameView({
                           key={group.campaign?.id ?? "ungrouped"}
                           campaign={group.campaign}
                           documents={group.documents}
-                          campaigns={campaigns}
                           view={view}
                           embeddingConfigured={embeddingConfigured}
                           canWrite={canWrite}
@@ -251,9 +246,7 @@ export function GameView({
                           onOpenDoc={onOpenDoc}
                           onReindexDoc={onReindexDoc}
                           onDeleteDoc={onDeleteDoc}
-                          onRetitleDoc={onRetitleDoc}
-                          onAssignCampaign={onAssignCampaign}
-                          onScenarioOrder={onScenarioOrder}
+                          onEditDoc={onEditDoc}
                         />
                       ))}
                     </div>
