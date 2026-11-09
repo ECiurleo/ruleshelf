@@ -23,6 +23,7 @@ from app.providers.base import ProviderError
 from app.services.config_store import CONFIG_PATH, snapshot_config
 from app.services.embeddings import resolve_embedding
 from app.services.ingest import create_embed_job
+from app.services.rag import system_prompt as effective_system_prompt
 
 router = APIRouter(prefix="/api", tags=["meta"])
 
@@ -34,7 +35,12 @@ EDITABLE_SETTINGS = {
     "rag_top_k",
     "rag_temperature",
     "system_prompt",
+    "reddit_enabled",
+    "reddit_client_id",
+    "reddit_client_secret",
 }
+
+SECRET_SETTINGS = {"reddit_client_secret"}
 
 
 @router.get("/health")
@@ -79,10 +85,21 @@ class SettingsUpdate(BaseModel):
     rag_top_k: int | None = Field(default=None, ge=1, le=30)
     rag_temperature: float | None = Field(default=None, ge=0, le=2)
     system_prompt: str | None = Field(default=None, max_length=8000)
+    reddit_enabled: bool | None = None
+    reddit_client_id: str | None = Field(default=None, max_length=200)
+    reddit_client_secret: str | None = Field(default=None, max_length=400)
 
 
 def _settings_payload(conn: sqlite3.Connection) -> dict:
-    settings = all_settings(conn)
+    stored = all_settings(conn)
+    settings = {
+        key: ("" if key in SECRET_SETTINGS else value)
+        for key, value in stored.items()
+    }
+    settings["reddit_secret_set"] = "1" if stored.get("reddit_client_secret") else "0"
+    # Show the prompt the model actually receives, including the timing rule
+    # appended to older stored prompts.
+    settings["system_prompt"] = effective_system_prompt(conn)
     provider_names = {
         row["id"]: row["name"] for row in conn.execute("SELECT id, name FROM providers")
     }
@@ -126,6 +143,10 @@ def _settings_payload(conn: sqlite3.Connection) -> dict:
             "chat_ready": chat_ready,
             "chat_model_active": chat_model,
             "provider_names": provider_names,
+            "reddit_ready": bool(
+                stored.get("reddit_client_id") and stored.get("reddit_client_secret")
+            ),
+            "reddit_enabled": stored.get("reddit_enabled", "1") != "0",
         },
     }
 
@@ -149,6 +170,10 @@ def update_settings(payload: SettingsUpdate):
                 ).fetchone()
                 if not exists:
                     raise HTTPException(400, f"Provider '{value}' is not available.")
+            if key == "reddit_client_secret" and not str(value).strip():
+                continue
+            if isinstance(value, bool):
+                value = "1" if value else "0"
             set_setting(conn, key, str(value))
             if key == "embedding_provider":
                 # Clear a stale model from a previous provider.

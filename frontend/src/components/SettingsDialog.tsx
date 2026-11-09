@@ -248,6 +248,11 @@ function SearchTab({
   const [topK, setTopK] = useState(settings.rag_top_k ?? "10");
   const [temperature, setTemperature] = useState(settings.rag_temperature ?? "0.2");
   const [systemPrompt, setSystemPrompt] = useState(settings.system_prompt ?? "");
+  const [redditEnabled, setRedditEnabled] = useState(
+    settings.reddit_enabled !== "0",
+  );
+  const [redditClientId, setRedditClientId] = useState(settings.reddit_client_id ?? "");
+  const [redditSecret, setRedditSecret] = useState("");
   const [chatModels, setChatModels] = useState<ModelInfo[]>([]);
   const [embedModels, setEmbedModels] = useState<ModelInfo[]>([]);
   const [busy, setBusy] = useState(false);
@@ -299,7 +304,11 @@ function SearchTab({
         rag_top_k: Number(topK) || 10,
         rag_temperature: Number(temperature) || 0,
         system_prompt: systemPrompt,
+        reddit_enabled: redditEnabled,
+        reddit_client_id: redditClientId.trim(),
+        ...(redditSecret.trim() ? { reddit_client_secret: redditSecret.trim() } : {}),
       });
+      setRedditSecret("");
       await onRefresh();
       notify("Settings saved.", "ok");
     } catch (err) {
@@ -407,6 +416,62 @@ function SearchTab({
             onChange={(event) => setSystemPrompt(event.target.value)}
           />
         </label>
+      </section>
+
+      <section className="settings-section">
+        <h3>Community search</h3>
+        <p className="fine-print">
+          BoardGameGeek threads are found through web search and need no account. Reddit
+          requires a free Reddit API app: create one at reddit.com/prefs/apps (type
+          <em> script</em>, redirect URI <code>http://localhost:8080</code>), then paste its
+          client ID and secret here. Only public posts are read; no Reddit password is stored.
+        </p>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={redditEnabled}
+            onChange={(event) => setRedditEnabled(event.target.checked)}
+          />
+          Search Reddit as well as BoardGameGeek
+        </label>
+        <div className="provider-grid">
+          <label className="field">
+            <span>Reddit client ID</span>
+            <input
+              value={redditClientId}
+              onChange={(event) => setRedditClientId(event.target.value)}
+              placeholder="from reddit.com/prefs/apps"
+              autoComplete="off"
+            />
+          </label>
+          <label className="field">
+            <span>
+              Reddit client secret{" "}
+              <small>
+                ·{" "}
+                {settings.reddit_secret_set === "1"
+                  ? "stored; leave blank to keep it"
+                  : "not set"}
+              </small>
+            </span>
+            <input
+              type="password"
+              value={redditSecret}
+              onChange={(event) => setRedditSecret(event.target.value)}
+              placeholder={settings.reddit_secret_set === "1" ? "••••••••" : "paste the secret"}
+              autoComplete="new-password"
+            />
+          </label>
+        </div>
+        <p className="fine-print">
+          Status:{" "}
+          {bundle.info.reddit_ready
+            ? "Reddit credentials configured"
+            : "Reddit not configured — BGG search still works"}
+          {bundle.info.reddit_ready && !bundle.info.reddit_enabled
+            ? " · Reddit search is currently disabled"
+            : ""}
+        </p>
       </section>
 
       <section className="settings-section">

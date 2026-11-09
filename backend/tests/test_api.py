@@ -555,6 +555,93 @@ def test_community_prompt_excludes_official_history():
     assert "Do not use earlier turns as sources" in prompt
 
 
+def test_reddit_settings_are_redacted_and_kept(client):
+    saved = client.put(
+        "/api/settings",
+        json={
+            "reddit_client_id": "reddit-client",
+            "reddit_client_secret": "super-secret",
+            "reddit_enabled": True,
+        },
+    ).json()
+    assert saved["settings"]["reddit_client_secret"] == ""
+    assert saved["settings"]["reddit_secret_set"] == "1"
+    assert saved["info"]["reddit_ready"] is True
+    assert saved["info"]["reddit_enabled"] is True
+
+    # A blank secret on the next save must not wipe the stored one.
+    kept = client.put(
+        "/api/settings",
+        json={"reddit_client_id": "reddit-client", "reddit_client_secret": ""},
+    ).json()
+    assert kept["settings"]["reddit_secret_set"] == "1"
+
+
+def test_reddit_result_is_labelled_and_linked():
+    from app.services.reddit import _result
+
+    result = _result(
+        {
+            "id": "abc123",
+            "permalink": "/r/EarthborneRangers/comments/abc123/flood_timing/",
+            "title": "Flood &amp; setup timing",
+            "selftext": "The flood is added after setup.",
+            "subreddit": "EarthborneRangers",
+        }
+    )
+    assert result is not None
+    assert result["source_type"] == "reddit"
+    assert result["url"].startswith("https://www.reddit.com/r/EarthborneRangers/")
+    assert result["document"]["title"] == "Flood & setup timing"
+    assert result["document"]["role_label"] == "Reddit · r/EarthborneRangers"
+    assert result["snippet"] == "The flood is added after setup."
+
+
+def test_reddit_without_credentials_is_optional():
+    from app.services.reddit import search_reddit
+
+    results, note = search_reddit("Earthborne Rangers flood", "Earthborne Rangers", 3)
+    assert results == []
+    assert "Reddit API app" in note
+
+
+def test_reddit_queries_use_game_and_question_terms():
+    from app.services.reddit import _reddit_queries
+
+    queries = _reddit_queries(
+        "if i draw a Flood card during location setup do I automatically fail "
+        "its condition?",
+        "Earthborne Rangers",
+    )
+    assert len(queries) <= 6
+    assert queries[0].startswith("if i draw")
+    assert any(query.startswith("Earthborne Rangers") for query in queries)
+
+
+def test_rag_marks_reddit_sources_as_unofficial():
+    from app.services.rag import build_context, references_markdown
+
+    result = {
+        "source_type": "reddit",
+        "url": "https://www.reddit.com/r/EarthborneRangers/comments/abc/thread/",
+        "document": {
+            "id": "",
+            "title": "Flood card timing",
+            "role_label": "Reddit · r/EarthborneRangers",
+            "overrides": False,
+        },
+        "game": {"title": "Earthborne Rangers"},
+        "page_start": None,
+        "page_end": None,
+        "text": "A poster says the flood is added after setup.",
+    }
+    context, used = build_context([result])
+    assert "REDDIT (unofficial)" in context
+    markdown = references_markdown(used)
+    assert "**REDDIT**" in markdown
+    assert "unofficial Reddit post" in markdown
+
+
 def test_bgg_queries_broaden_long_questions():
     from app.services.bgg import _bgg_queries
 
@@ -698,7 +785,8 @@ def test_community_answer_uses_global_reference_numbers():
     assert used and used[0]["ref"] == 4
     prompt = messages[-1]["content"]
     assert "[4] BGG FORUM (unofficial)" in prompt
-    assert "unofficial BoardGameGeek forum posts" in prompt
+    assert "unofficial community forum posts" in prompt
+    assert "BoardGameGeek and Reddit" in prompt
     assert "which you cannot see" in prompt
 
 

@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import threading
+import time
 from itertools import combinations
 
 from fastapi import APIRouter, HTTPException, Query
@@ -23,6 +24,7 @@ from app.services.rag import (
     references_markdown,
     rewrite_queries,
 )
+from app.services.reddit import search_reddit
 from app.services.search import (
     SearchFilters,
     build_match_query,
@@ -270,26 +272,58 @@ def ask(payload: AskRequest):
         )
         game_title = game_row["title"] if game_row else None
         game_type = game_row["game_type"] if game_row else "other"
-        bgg_state: dict = {"results": [], "note": None}
-        bgg_thread: threading.Thread | None = None
+        community_state: dict = {
+            "bgg": [],
+            "reddit": [],
+            "bgg_note": None,
+            "reddit_note": None,
+        }
+        community_threads: list[threading.Thread] = []
+        reddit_id = get_setting(conn, "reddit_client_id", "") or ""
+        reddit_secret = get_setting(conn, "reddit_client_secret", "") or ""
+        reddit_enabled = (get_setting(conn, "reddit_enabled", "1") or "1") != "0"
 
-        def _run_bgg() -> None:
-            try:
-                found, bgg_note = search_bgg(payload.query, game_title, limit=5)
-            except Exception:  # noqa: BLE001 - optional source must not fail the answer
-                found, bgg_note = [], "BGG web search was unavailable."
+        def _attach_game(found: list[dict], fallback: str) -> None:
             for item in found:
                 item["game"] = {
                     "id": payload.game_id or "",
-                    "title": game_title or "BoardGameGeek",
+                    "title": game_title or fallback,
                     "game_type": game_type,
                 }
-            bgg_state["results"] = found
-            bgg_state["note"] = bgg_note
+
+        def _run_bgg() -> None:
+            try:
+                found, note = search_bgg(payload.query, game_title, limit=5)
+            except Exception:  # noqa: BLE001 - optional source must not fail the answer
+                found, note = [], "BGG web search was unavailable."
+            _attach_game(found, "BoardGameGeek")
+            community_state["bgg"] = found
+            community_state["bgg_note"] = note
+
+        def _run_reddit() -> None:
+            try:
+                found, note = search_reddit(
+                    payload.query,
+                    game_title,
+                    limit=3,
+                    client_id=reddit_id,
+                    client_secret=reddit_secret,
+                )
+            except Exception:  # noqa: BLE001 - optional source must not fail the answer
+                found, note = [], "Reddit search was unavailable."
+            _attach_game(found, "Reddit")
+            community_state["reddit"] = found
+            community_state["reddit_note"] = note
 
         if payload.include_bgg:
-            bgg_thread = threading.Thread(target=_run_bgg, daemon=True)
-            bgg_thread.start()
+            for target in (_run_bgg, _run_reddit):
+                if target is _run_reddit and (
+                    not reddit_enabled or not reddit_id or not reddit_secret
+                ):
+                    continue
+                thread = threading.Thread(target=target, daemon=True)
+                community_threads.append(thread)
+                thread.start()
 
         # The official answer uses rulebooks only; forum posts get their own
         # answer underneath so readers can tell the two apart.
@@ -313,6 +347,7 @@ def ask(payload: AskRequest):
                 "embedding": embedding_info,
                 "expanded_queries": expanded_queries,
                 "bgg_count": 0,
+                "reddit_count": 0,
                 "bgg_note": None,
             },
         )
@@ -343,21 +378,38 @@ def ask(payload: AskRequest):
         community_used: list[dict] = []
         if payload.include_bgg:
             yield _sse("community_search", {})
-            if bgg_thread is not None:
-                bgg_thread.join(timeout=20)
-                if bgg_thread.is_alive():
-                    bgg_state["results"] = []
-                    bgg_state["note"] = (
-                        "BGG search timed out; the rulebook answer is unaffected."
-                    )
-            bgg_results = bgg_state["results"]
-            bgg_note = bgg_state["note"]
+            deadline = time.monotonic() + 20.0
+            for thread in community_threads:
+                thread.join(timeout=max(0.0, deadline - time.monotonic()))
+                if thread.is_alive():
+                    if thread is community_threads[0]:
+                        community_state["bgg"] = []
+                        community_state["bgg_note"] = (
+                            "BGG search timed out; the rulebook answer is unaffected."
+                        )
+                    else:
+                        community_state["reddit"] = []
+                        community_state["reddit_note"] = (
+                            "Reddit search timed out; the rulebook answer is unaffected."
+                        )
+            bgg_results = community_state["bgg"]
+            reddit_results = community_state["reddit"]
+            community_results = bgg_results + reddit_results
+            notes = [
+                note
+                for note in (
+                    community_state["bgg_note"],
+                    community_state["reddit_note"],
+                )
+                if note and not note.startswith("No ")
+            ]
+            community_note = "; ".join(notes) if notes else None
 
-            if bgg_results:
+            if community_results:
                 community_messages, community_used = build_community_messages(
                     conn,
                     payload.query,
-                    bgg_results,
+                    community_results,
                     payload.history,
                     start_ref=len(used) + 1,
                 )
@@ -369,14 +421,19 @@ def ask(payload: AskRequest):
                                 _public_result(result) for result in community_used
                             ],
                             "count": len(community_used),
-                            "note": bgg_note,
+                            "bgg_count": len(bgg_results),
+                            "reddit_count": len(reddit_results),
+                            "note": community_note,
                         },
                     )
             else:
                 community_messages, community_used = [], []
                 yield _sse(
                     "community_note",
-                    {"note": bgg_note or "No BGG forum threads found for this question."},
+                    {
+                        "note": community_note
+                        or "No community threads found for this question."
+                    },
                 )
 
         if community_used and community_messages:

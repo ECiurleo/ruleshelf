@@ -39,6 +39,7 @@ interface SearchMeta {
   model?: string;
   embedding?: { provider_name: string; model: string } | null;
   bgg_count?: number;
+  reddit_count?: number;
   bgg_note?: string | null;
 }
 
@@ -345,6 +346,7 @@ export default function App() {
           note: response.note,
           embedding: response.embedding,
           bgg_count: response.bgg_count ?? 0,
+          reddit_count: 0,
           bgg_note: response.bgg_note ?? null,
         });
       } catch (err) {
@@ -400,7 +402,8 @@ export default function App() {
               existing
                 ? {
                     ...existing,
-                    bgg_count: payload.count,
+                    bgg_count: payload.bgg_count ?? 0,
+                    reddit_count: payload.reddit_count ?? 0,
                     bgg_note: payload.note,
                   }
                 : existing,
@@ -463,6 +466,7 @@ export default function App() {
             note: fallback.note,
             embedding: fallback.embedding,
             bgg_count: fallback.bgg_count ?? 0,
+            reddit_count: 0,
             bgg_note: fallback.bgg_note ?? null,
           });
         } catch {
@@ -488,7 +492,7 @@ export default function App() {
   };
 
   const openReaderForResult = (result: SearchResult) => {
-    if (result.source_type === "bgg" && result.url) {
+    if ((result.source_type === "bgg" || result.source_type === "reddit") && result.url) {
       window.open(result.url, "_blank", "noopener,noreferrer");
       return;
     }

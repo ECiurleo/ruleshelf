@@ -77,7 +77,7 @@ export interface SearchResult {
   page_start: number | null;
   page_end: number | null;
   score: number;
-  source_type: "rules" | "bgg";
+  source_type: "rules" | "bgg" | "reddit";
   url: string | null;
   document: {
     id: string;
@@ -174,6 +174,8 @@ export interface AppSettings {
     chat_ready: boolean;
     chat_model_active: string;
     provider_names: Record<string, string>;
+    reddit_ready: boolean;
+    reddit_enabled: boolean;
   };
 }
 
@@ -367,7 +369,7 @@ export const api = {
     request<{ models: ModelInfo[]; count: number }>(`/api/providers/${id}/models`),
 
   settings: () => request<AppSettings>("/api/settings"),
-  updateSettings: (body: Record<string, string | number>) =>
+  updateSettings: (body: Record<string, string | number | boolean>) =>
     request<AppSettings>("/api/settings", { method: "PUT", body: JSON.stringify(body) }),
   buildEmbeddings: (body: { game_id?: string; force?: boolean }) =>
     post<{ job_id: string; status: string }>("/api/embeddings/build", body),
@@ -405,6 +407,8 @@ export interface AskHandlers {
   onCommunitySources?: (payload: {
     sources: SearchResult[];
     count: number;
+    bgg_count?: number;
+    reddit_count?: number;
     note: string | null;
   }) => void;
   onCommunityNote?: (note: string | null) => void;
@@ -467,7 +471,13 @@ export async function ask(
       handlers.onCommunitySearch?.();
     } else if (event === "community_sources") {
       handlers.onCommunitySources?.(
-        data as { sources: SearchResult[]; count: number; note: string | null },
+        data as {
+          sources: SearchResult[];
+          count: number;
+          bgg_count?: number;
+          reddit_count?: number;
+          note: string | null;
+        },
       );
     } else if (event === "community_note") {
       handlers.onCommunityNote?.((data as { note: string | null }).note);

@@ -80,9 +80,9 @@ ORDER_SYSTEM = (
 )
 
 COMMUNITY_SYSTEM = (
-    "You summarise unofficial tabletop forum posts for a reader. Use only the "
-    "numbered posts, never present forum opinion as an official rule, and never "
-    "invent posts, rules, page numbers or links."
+    "You summarise unofficial tabletop community posts from BoardGameGeek and "
+    "Reddit for a reader. Use only the numbered posts, never present forum opinion "
+    "as an official rule, and never invent posts, rules, page numbers or links."
 )
 
 _LEGACY_LEAD = re.compile(r"Put the direct answer in the first sentence\.\s*", re.IGNORECASE)
@@ -106,8 +106,9 @@ def system_prompt(conn: sqlite3.Connection) -> str:
 def _citation_label(result: dict) -> str:
     game = result["game"]["title"]
     document = result["document"]["title"]
-    if result.get("source_type") == "bgg":
-        return f"BGG FORUM (unofficial) — {document} — {game}"
+    if result.get("source_type") in {"bgg", "reddit"}:
+        source = "BGG FORUM" if result.get("source_type") == "bgg" else "REDDIT"
+        return f"{source} (unofficial) — {document} — {game}"
     role = result["document"].get("role_label") or ""
     page = result.get("page_start")
     parts = [game, document]
@@ -132,8 +133,12 @@ def build_context(results: Sequence[dict], start_ref: int = 1) -> tuple[str, lis
     the whole window: BGG results are appended last, so reserve room for them
     instead of letting the first long books crowd them out.
     """
-    forum = [result for result in results if result.get("source_type") == "bgg"]
-    rules = [result for result in results if result.get("source_type") != "bgg"]
+    forum = [
+        result for result in results if result.get("source_type") in {"bgg", "reddit"}
+    ]
+    rules = [
+        result for result in results if result.get("source_type") not in {"bgg", "reddit"}
+    ]
     reserved = sum(min(len(result["text"].strip()), 600) + 140 for result in forum)
     rule_budget = max(MAX_CONTEXT_CHARS - reserved, MAX_CONTEXT_CHARS // 2)
 
@@ -171,7 +176,11 @@ def build_messages(
 ) -> tuple[list[dict], list[dict]]:
     # BGG threads are answered separately; never let them enter the official
     # context or consume its excerpt budget.
-    rule_results = [result for result in results if result.get("source_type") != "bgg"]
+    rule_results = [
+        result
+        for result in results
+        if result.get("source_type") not in {"bgg", "reddit"}
+    ]
     context, used = build_context(rule_results)
     if not context:
         context = "(No excerpts were retrieved from the library.)"
@@ -269,9 +278,9 @@ def build_community_messages(
         return [], []
 
     prompt = (
-        "The numbered excerpts below are unofficial BoardGameGeek forum posts, "
-        "not rules text. They appear under the official answer as a separate "
-        "community answer, which you cannot see.\n\n"
+        "The numbered excerpts below are unofficial community forum posts "
+        "(BoardGameGeek and Reddit), not rules text. They appear under the official "
+        "answer as a separate community answer, which you cannot see.\n\n"
         f"{context}\n\n"
         f"Question: {query}\n\n"
         "Report what the posters say, using only these posts.\n"
@@ -343,11 +352,13 @@ def references_markdown(results: Sequence[dict], refs: Sequence[int] | None = No
         if page:
             url += f"#page={page}"
 
-        if result.get("source_type") == "bgg":
+        if result.get("source_type") in {"bgg", "reddit"}:
+            source = "BGG FORUM" if result.get("source_type") == "bgg" else "REDDIT"
+            site = "community post" if source == "BGG FORUM" else "Reddit post"
             lines.append(
-                f"- **{number}.** **BGG FORUM** "
+                f"- **{number}.** **{source}** "
                 f"[{_escape_markdown(document['title'])}]({result.get('url') or ''})"
-                f" — *{_escape_markdown(game['title'])}* · unofficial community post"
+                f" — *{_escape_markdown(game['title'])}* · unofficial {site}"
             )
             continue
 

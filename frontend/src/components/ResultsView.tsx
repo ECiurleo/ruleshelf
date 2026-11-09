@@ -5,7 +5,8 @@ import { Icon } from "./Icon";
 
 function ResultCard({ result, onOpen }: { result: SearchResult; onOpen: () => void }) {
   const errata = result.document.overrides;
-  const forum = result.source_type === "bgg";
+  const forum = result.source_type === "bgg" || result.source_type === "reddit";
+  const forumLabel = result.source_type === "reddit" ? "Reddit · unofficial" : "BGG forum · unofficial";
   return (
     <article className={`result-card ${errata ? "errata" : ""} ${forum ? "bgg" : ""}`} onClick={onOpen}>
       <div className="result-meta">
@@ -13,7 +14,7 @@ function ResultCard({ result, onOpen }: { result: SearchResult; onOpen: () => vo
         <span className="result-doc">{result.document.title}</span>
         <span className="dot-sep" />
         {forum ? (
-          <span className="forum-flag">BGG forum · unofficial</span>
+          <span className="forum-flag">{forumLabel}</span>
         ) : errata ? (
           <span className="errata-flag">Errata · overrides core rules</span>
         ) : (
@@ -62,6 +63,7 @@ export function ResultsView({
     model?: string;
     embedding?: { provider_name: string; model: string } | null;
     bgg_count?: number;
+    reddit_count?: number;
     bgg_note?: string | null;
   } | null;
   answerMode: boolean;
@@ -178,11 +180,20 @@ export function ResultsView({
                 </span>
               </span>
             )}
-            {(meta.bgg_count ?? 0) > 0 && (
-              <span className="forum-flag" title="Unofficial BoardGameGeek forum results">
-                BGG forums · {meta.bgg_count}
+            {(meta.bgg_count ?? 0) > 0 || (meta.reddit_count ?? 0) > 0 ? (
+              <span
+                className="forum-flag"
+                title="Unofficial community forum results"
+              >
+                Community ·{" "}
+                {[
+                  (meta.bgg_count ?? 0) > 0 ? `BGG ${meta.bgg_count}` : null,
+                  (meta.reddit_count ?? 0) > 0 ? `Reddit ${meta.reddit_count}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
-            )}
+            ) : null}
           </div>
         )}
       </div>

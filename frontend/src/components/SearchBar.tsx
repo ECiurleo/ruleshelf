@@ -178,7 +178,7 @@ export function SearchBar({
         )}
         <label
           className={`bgg-toggle ${includeBgg ? "on" : ""}`}
-          title="Also search BoardGameGeek forum threads via web search. Unofficial; rulebooks are prioritised."
+          title="Also search BoardGameGeek and Reddit community threads. Unofficial; rulebooks are prioritised."
         >
           <input
             type="checkbox"
@@ -186,7 +186,7 @@ export function SearchBar({
             onChange={(event) => setIncludeBgg(event.target.checked)}
           />
           <Icon name="external" size={13} />
-          <span>BGG forums</span>
+          <span>Community</span>
         </label>
         <span className="filter-note">
           {mode === "semantic"

@@ -37,11 +37,14 @@ docker compose up -d      # then open http://localhost:8080
 - **Light and dark themes.** A warm paper light theme and the original dark theme, with a toggle in
   the sidebar (and top bar). The choice is remembered per browser and follows the system theme on
   first visit.
-- **Optional BGG forums.** *BGG forums* is on by default; switch it off to skip it. It adds BoardGameGeek thread snippets
-  from a web search. Forum results are highlighted as unofficial, while rulebook excerpts are always
-  authoritative and ranked first, and the AI writes a separate **Community Answer** from the threads
-  underneath the official answer. No BGG API token is required: only the question and game title go to
-  the search engine, and only public thread snippets are used.
+- **Optional community search.** *Community* is on by default; switch it off to skip it. It adds
+  BoardGameGeek thread snippets from a web search and, when configured, Reddit posts through Reddit's
+  official OAuth API. Community results are highlighted as unofficial, while rulebook excerpts are
+  always authoritative and ranked first, and the AI writes a separate **Community Answer** from the
+  threads underneath the official answer. BGG needs no API token. Reddit needs a free Reddit API app:
+  create one at `reddit.com/prefs/apps` (type **script**, redirect URI `http://localhost:8080`) and
+  paste its client ID and secret in **Settings → Search & answers → Community search**. Only public
+  posts are read; no Reddit password is stored.
 - **Bring your own model.** Built-in support for **Ollama** (free/local), **OpenAI/ChatGPT**,
   **Anthropic Claude**, **DeepSeek** and **Qwen/DashScope**, plus any OpenAI-compatible endpoint
   (OpenRouter, LM Studio, vLLM, LiteLLM, Azure gateways…). Adding another API dialect is one file.
