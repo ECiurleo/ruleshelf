@@ -374,7 +374,7 @@ own reverse proxy) if the machine is shared — anyone who can reach the port ca
 
 ## Development
 
-Requirements: Python 3.12, Node 22.
+Requirements: Python 3.12, Node 26.
 
 ```bash
 # backend
