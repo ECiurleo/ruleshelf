@@ -49,7 +49,8 @@ docker compose up -d      # then open http://localhost:8080
 - **Choose the model per question.** The search bar lists every chat model reported by your enabled
   providers; pick one before asking. Answers show the exact answer model and embedding model used.
 - **Campaigns with scenarios.** Create a campaign group (for example *The Enemy Within*) and file
-  each scenario/book under it. Scenarios can be reordered and moved between campaigns without
+  each scenario/book under it. Attach extra files (maps, handouts, card decks) to a scenario so a
+  whole adventure stays together. Scenarios can be reordered and moved between campaigns without
   re-uploading; each campaign can be collapsed in the view.
 - **Data-driven game types.** Built-in RPG / board game / wargame types, and custom types with
   custom roles can be added in Settings.
@@ -307,9 +308,10 @@ and marks its results as overriding.
 Campaigns are groups inside the campaign role. In a game, open **Campaigns → New campaign**, name it
 (e.g. *The Enemy Within*), then use **Add scenario** to upload each book into it. Set the scenario
 order number on each book to control its position, and use **Hide/Show scenarios** to collapse a
-campaign. Existing campaign documents appear under *Ungrouped campaign documents*; use the campaign
-menu on each book to move them into a group. Deleting a campaign keeps its documents and ungroups
-them.
+campaign. Use **Add file** on a scenario to attach maps, handouts or card decks: those files inherit
+the scenario's campaign, are indexed for search, and are deleted with the scenario. Existing campaign
+documents appear under *Ungrouped campaign documents*; use the campaign menu on each book to move
+them into a group. Deleting a campaign keeps its documents and ungroups them.
 
 ![A game shelf with core rules, supplements and a campaign](docs/screenshots/game.png)
 

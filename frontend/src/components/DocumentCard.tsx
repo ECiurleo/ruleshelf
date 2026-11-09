@@ -74,6 +74,12 @@ export function DocumentCard({
             <span>{doc.campaign_title ?? "Ungrouped campaign"}</span>
             <span className="dot-sep" />
             <span>Scenario order {doc.sort_order}</span>
+            {doc.file_count > 0 && (
+              <>
+                <span className="dot-sep" />
+                <span>{plural(doc.file_count, "file")} attached</span>
+              </>
+            )}
           </div>
         )}
         {failed && doc.error && <p className="doc-error">{doc.error}</p>}

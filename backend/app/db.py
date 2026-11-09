@@ -19,7 +19,7 @@ from app.defaults import BUILTIN_PROVIDERS, DEFAULT_SYSTEM_PROMPT, GAME_TYPES
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS games (
@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS documents (
     title             TEXT NOT NULL,
     role              TEXT NOT NULL DEFAULT 'core',
     campaign_id       TEXT,
+    scenario_id       TEXT,
     sort_order        INTEGER NOT NULL DEFAULT 0,
     original_filename TEXT NOT NULL DEFAULT '',
     stored_name       TEXT NOT NULL DEFAULT '',
@@ -59,6 +60,7 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 CREATE INDEX IF NOT EXISTS idx_documents_game ON documents(game_id);
 CREATE INDEX IF NOT EXISTS idx_documents_campaign ON documents(campaign_id);
+CREATE INDEX IF NOT EXISTS idx_documents_scenario ON documents(scenario_id);
 
 CREATE TABLE IF NOT EXISTS campaigns (
     id          TEXT PRIMARY KEY,
@@ -248,6 +250,18 @@ def init_db() -> None:
                 "CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)"
             )
             version = 4
+
+        if version < 5:
+            log.info("Migrating database to schema v5 (scenario files)")
+            columns = {
+                row["name"] for row in conn.execute("PRAGMA table_info(documents)")
+            }
+            if "scenario_id" not in columns:
+                conn.execute("ALTER TABLE documents ADD COLUMN scenario_id TEXT")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_documents_scenario ON documents(scenario_id)"
+            )
+            version = 5
 
         conn.execute(f"PRAGMA user_version = {version}")
         _seed(conn)

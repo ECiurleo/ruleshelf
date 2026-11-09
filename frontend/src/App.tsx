@@ -102,6 +102,7 @@ export default function App() {
   const [editingDoc, setEditingDoc] = useState<Document | null>(null);
   const [uploadRole, setUploadRole] = useState<string | null>(null);
   const [uploadCampaignId, setUploadCampaignId] = useState<string | null>(null);
+  const [uploadScenarioId, setUploadScenarioId] = useState<string | null>(null);
   const [campaignDialog, setCampaignDialog] = useState<{ campaign?: Campaign } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -529,7 +530,16 @@ export default function App() {
   };
 
   const deleteDocument = async (doc: Document) => {
-    if (!window.confirm(`Delete "${doc.title}"? This removes its index and file.`)) return;
+    const extra = doc.file_count
+      ? ` and its ${doc.file_count} attached file${doc.file_count === 1 ? "" : "s"}`
+      : "";
+    if (
+      !window.confirm(
+        `Delete "${doc.title}"${extra}? This removes their index and files.`,
+      )
+    ) {
+      return;
+    }
     try {
       await api.deleteDocument(doc.id);
       await Promise.all([refreshDocuments(activeGameId), refreshCampaigns(activeGameId)]);
@@ -650,9 +660,10 @@ export default function App() {
           campaigns={campaigns}
           embeddingConfigured={bundle?.info.embedding_ready ?? false}
           canWrite={isAdmin}
-          onUpload={(role, campaignId) => {
+          onUpload={(role, campaignId, scenarioId) => {
             setUploadRole(role);
             setUploadCampaignId(campaignId ?? null);
+            setUploadScenarioId(scenarioId ?? null);
           }}
           onEdit={() => setEditingGame(activeGame)}
           onDelete={deleteGame}
@@ -860,6 +871,7 @@ export default function App() {
           document={editingDoc}
           gameType={activeGameType}
           campaigns={campaigns}
+          documents={documents}
           onClose={() => setEditingDoc(null)}
           onSaved={saveEditedDocument}
           notify={notify}
@@ -884,11 +896,14 @@ export default function App() {
           gameType={activeGameType}
           formats={bundle?.info.formats ?? []}
           campaigns={campaigns}
+          documents={documents}
           initialRole={uploadRole}
           initialCampaignId={uploadCampaignId}
+          initialScenarioId={uploadScenarioId}
           onClose={() => {
             setUploadRole(null);
             setUploadCampaignId(null);
+            setUploadScenarioId(null);
           }}
           onUploaded={async () => {
             await Promise.all([

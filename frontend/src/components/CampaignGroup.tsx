@@ -1,8 +1,7 @@
 import type { Campaign, Document } from "../lib/api";
 import { plural } from "../lib/api";
 import { Icon } from "./Icon";
-import { DocumentCard } from "./DocumentCard";
-import { DocumentCoverCard } from "./DocumentCoverCard";
+import { ScenarioGroup } from "./ScenarioGroup";
 
 export function CampaignGroup({
   campaign,
@@ -27,7 +26,7 @@ export function CampaignGroup({
   canWrite?: boolean;
   collapsed: boolean;
   onToggleCollapsed: () => void;
-  onUpload: (campaignId: string | null) => void;
+  onUpload: (campaignId: string | null, scenarioId?: string | null) => void;
   onEdit?: (campaign: Campaign) => void;
   onDelete?: (campaign: Campaign) => void;
   onOpenDoc: (doc: Document) => void;
@@ -38,34 +37,41 @@ export function CampaignGroup({
   const ordered = [...documents].sort(
     (a, b) => a.sort_order - b.sort_order || a.title.localeCompare(b.title),
   );
+  const byId = new Map(documents.map((doc) => [doc.id, doc]));
+  const filesByLead = new Map<string, Document[]>();
+  for (const doc of ordered) {
+    if (doc.scenario_id && byId.has(doc.scenario_id)) {
+      const files = filesByLead.get(doc.scenario_id) ?? [];
+      files.push(doc);
+      filesByLead.set(doc.scenario_id, files);
+    }
+  }
+  const scenarios = ordered
+    .filter((doc) => !(doc.scenario_id && byId.has(doc.scenario_id)))
+    .map((lead) => ({ lead, files: filesByLead.get(lead.id) ?? [] }));
+  const fileCount = scenarios.reduce((total, entry) => total + entry.files.length, 0);
+  const scenarioCount = plural(scenarios.length, "scenario") +
+    (fileCount ? ` · ${plural(fileCount, "file")}` : "");
+
   const content = (
     <>
-      {documents.length ? (
+      {scenarios.length ? (
         <div className={view === "grid" ? "document-grid" : "document-list"}>
-          {ordered.map((doc) =>
-            view === "grid" ? (
-              <DocumentCoverCard
-                key={doc.id}
-                document={doc}
-                canWrite={canWrite}
-                onOpen={() => onOpenDoc(doc)}
-                onReindex={() => onReindexDoc(doc)}
-                onDelete={() => onDeleteDoc(doc)}
-                onEdit={() => onEditDoc(doc)}
-              />
-            ) : (
-              <DocumentCard
-                key={doc.id}
-                document={doc}
-                embeddingConfigured={embeddingConfigured}
-                canWrite={canWrite}
-                onOpen={() => onOpenDoc(doc)}
-                onReindex={() => onReindexDoc(doc)}
-                onDelete={() => onDeleteDoc(doc)}
-                onEdit={() => onEditDoc(doc)}
-              />
-            ),
-          )}
+          {scenarios.map(({ lead, files }) => (
+            <ScenarioGroup
+              key={lead.id}
+              lead={lead}
+              files={files}
+              view={view}
+              embeddingConfigured={embeddingConfigured}
+              canWrite={canWrite}
+              onOpenDoc={onOpenDoc}
+              onReindexDoc={onReindexDoc}
+              onDeleteDoc={onDeleteDoc}
+              onEditDoc={onEditDoc}
+              onAddFile={() => onUpload(campaign?.id ?? null, lead.id)}
+            />
+          ))}
         </div>
       ) : campaign && canWrite ? (
         <button className="dropzone small" onClick={() => onUpload(campaign.id)}>
@@ -85,7 +91,7 @@ export function CampaignGroup({
             <p className="campaign-sub">Choose a campaign on each book to file it.</p>
           </div>
           <div className="campaign-head-actions">
-            <span className="role-count">{plural(documents.length, "book")}</span>
+            <span className="role-count">{scenarioCount}</span>
             <button
               className="button ghost small collapse-toggle"
               onClick={onToggleCollapsed}
@@ -109,7 +115,7 @@ export function CampaignGroup({
           {campaign.description && <p className="campaign-sub">{campaign.description}</p>}
         </div>
         <div className="campaign-head-actions">
-          <span className="role-count">{plural(documents.length, "book")}</span>
+          <span className="role-count">{scenarioCount}</span>
           <button
             className="button ghost small collapse-toggle"
             onClick={onToggleCollapsed}
