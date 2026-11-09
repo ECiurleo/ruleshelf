@@ -338,10 +338,10 @@ them into a group. Deleting a campaign keeps its documents and ungroups them.
 | `.html`, `.htm` | Readable text is extracted. |
 | `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff` | Stored and previewed but **not indexed** — no OCR runs on upload. Use these for maps, handouts and card scans; OCR them and upload the PDF if you want them searchable. |
 
-Maximum upload size is 512 MB per file (`RULESHELF_MAX_UPLOAD_MB` to change it). If a large file
-fails with **413**, the limit being hit is usually in front of Ruleshelf: Cloudflare rejects request
-bodies over 100 MB on every plan, and nginx defaults are often lower (`client_max_body_size 512m;`).
-Raise the proxy limit or upload over the local network.
+Maximum upload size is 512 MB per file (`RULESHELF_MAX_UPLOAD_MB` to change it). Files over
+64 MB are sent in 8 MB chunks, so a reverse proxy's per-request body limit — Cloudflare caps
+requests at 100 MB — does not block large books. If a 413 still appears, the proxy is rejecting
+even an 8 MB request: raise `client_max_body_size` (nginx) or upload over the local network.
 
 ## Data, backup and privacy
 
@@ -475,9 +475,10 @@ Other extension points: `services/chunking.py` (splitting), `services/search.py`
   `extra_hosts: host.docker.internal:host-gateway` (already in the compose file), and make sure
   Ollama listens on all interfaces (`OLLAMA_HOST=0.0.0.0`).
 - **PDF indexed 0 pages.** It is a scan without a text layer; OCR it first.
-- **413 on a large PDF.** Ruleshelf's own limit is 512 MB, so a bare 413 almost always comes from a
-  reverse proxy. Cloudflare caps request bodies at 100 MB; for nginx set
-  `client_max_body_size 512m;` (and reload). Uploading directly on the LAN bypasses the proxy.
+- **413 on a large PDF.** Ruleshelf's own limit is 512 MB, and files over 64 MB upload in 8 MB
+  chunks, so Cloudflare's 100 MB request cap is not the issue. If you still see 413, the proxy is
+  rejecting even a chunk: set nginx `client_max_body_size 512m;` (and reload), or upload over the
+  local network.
 - **Changed the embedding model and search feels wrong.** Settings → Search & answers →
   *Re-embed everything*.
 - **Permission denied on a bind mount.** The container runs as UID 1000; `chown -R 1000:1000` the

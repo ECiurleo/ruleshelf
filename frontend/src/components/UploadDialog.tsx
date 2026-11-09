@@ -15,10 +15,14 @@ interface QueueItem {
   id: number;
   file: File;
   status: "queued" | "uploading" | "done" | "error";
+  progress?: number;
   error?: string;
 }
 
 let nextId = 1;
+
+/** Above this, upload in chunks so proxy request limits do not apply. */
+const CHUNKED_THRESHOLD = 64 * 1024 * 1024;
 
 export function UploadDialog({
   game,
@@ -107,14 +111,29 @@ export function UploadDialog({
         current.map((entry) => (entry.id === item.id ? { ...entry, status: "uploading" } : entry)),
       );
       try {
-        const created = await api.uploadDocument(
-          game.id,
-          role,
-          item.file,
-          undefined,
-          role === "campaign" ? campaignId || null : null,
-          targetScenario,
-        );
+        const uploadOptions = {
+          campaignId: role === "campaign" ? campaignId || null : null,
+          scenarioId: targetScenario,
+        };
+        const created =
+          item.file.size > CHUNKED_THRESHOLD
+            ? await api.uploadDocumentChunked(game.id, role, item.file, {
+                ...uploadOptions,
+                onProgress: (fraction) =>
+                  setQueue((current) =>
+                    current.map((entry) =>
+                      entry.id === item.id ? { ...entry, progress: fraction } : entry,
+                    ),
+                  ),
+              })
+            : await api.uploadDocument(
+                game.id,
+                role,
+                item.file,
+                undefined,
+                uploadOptions.campaignId,
+                uploadOptions.scenarioId,
+              );
         if (role === "campaign" && groupFiles && !targetScenario) {
           // The first file becomes the scenario the rest are filed under.
           targetScenario = created.id;
@@ -172,7 +191,11 @@ export function UploadDialog({
       footer={
         <>
           <span className="modal-foot-note">
-            {doneCount > 0 ? `${doneCount} uploaded` : `${queue.length} file(s) queued`}
+            {doneCount > 0
+              ? `${doneCount} uploaded`
+              : busy
+                ? "Uploading…"
+                : `${queue.length} file(s) queued`}
           </span>
           <button className="button ghost" onClick={onClose} disabled={busy}>
             {doneCount > 0 ? "Done" : "Cancel"}
@@ -324,7 +347,14 @@ export function UploadDialog({
                 <small>{formatBytes(item.file.size)}</small>
                 {item.error && <small className="text-danger">{item.error}</small>}
               </div>
-              {item.status === "uploading" && <span className="spinner" />}
+              {item.status === "uploading" && (
+                <>
+                  {item.progress !== undefined && (
+                    <small>{Math.round(item.progress * 100)}%</small>
+                  )}
+                  <span className="spinner" />
+                </>
+              )}
               {item.status === "queued" && !busy && (
                 <button
                   className="icon-button small"
@@ -352,8 +382,9 @@ export function UploadDialog({
       )}
 
       <p className="fine-print">
-        Files up to {maxUploadMb} MB each. Scanned PDFs and images need a text layer (OCR) to be
-        searchable; indexing happens in the background — you can keep using the app.
+        Files up to {maxUploadMb} MB each; large books upload in pieces so proxy body limits do
+        not block them. Scanned PDFs and images need a text layer (OCR) to be searchable; indexing
+        happens in the background — you can keep using the app.
       </p>
     </Modal>
   );

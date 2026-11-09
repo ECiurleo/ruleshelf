@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 
+from app.config import UPLOADS_DIR
 from app.db import db, get_setting, set_setting
 from app.providers.base import ModelInfo, Provider, ProviderConfig
 from app.services.search import SearchFilters, search_semantic
-from tests.conftest import upload_document, wait_until_ready
+from tests.conftest import make_text_document, upload_document, wait_until_ready
 
 
 def test_api_requires_login(anon_client):
@@ -473,6 +474,85 @@ def test_image_files_are_stored_but_not_indexed(client, game):
     # Deleting the scenario takes the stored image with it.
     assert client.delete(f"/api/documents/{scenario['id']}").json()["files_deleted"] == 1
     assert client.get(f"/api/documents/{image['id']}").status_code == 404
+
+
+def test_chunked_upload_reassembles_the_file(client, game):
+    campaign = client.post(
+        f"/api/games/{game['id']}/campaigns", json={"title": "The Enemy Within"}
+    ).json()
+    data = make_text_document()
+    init = client.post(
+        "/api/documents/uploads",
+        json={
+            "game_id": game["id"],
+            "role": "campaign",
+            "title": "Death on the Reik",
+            "campaign_id": campaign["id"],
+            "filename": "death-on-the-reik.txt",
+            "size": len(data),
+            "content_type": "text/plain",
+        },
+    )
+    assert init.status_code == 201, init.text
+    upload = init.json()
+    upload_id = upload["upload_id"]
+    assert upload["chunk_size"] > 0
+
+    cut = len(data) // 2
+    for offset, chunk in ((0, data[:cut]), (cut, data[cut:])):
+        response = client.put(
+            f"/api/documents/uploads/{upload_id}?offset={offset}",
+            content=chunk,
+            headers={"content-type": "application/octet-stream"},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["received"] == offset + len(chunk)
+
+    done = client.post(f"/api/documents/uploads/{upload_id}/complete")
+    assert done.status_code == 201, done.text
+    document = done.json()
+    assert document["title"] == "Death on the Reik"
+    assert document["size_bytes"] == len(data)
+    assert document["campaign_title"] == "The Enemy Within"
+    ready = wait_until_ready(client, document["id"])
+    assert ready["status"] == "ready"
+    assert ready["page_count"] == 3
+    # Temporary pieces are cleaned up after completion.
+    assert not (UPLOADS_DIR / f"{upload_id}.part").exists()
+    assert not (UPLOADS_DIR / f"{upload_id}.json").exists()
+
+
+def test_chunked_upload_checks_offsets_and_size(client, game):
+    init = client.post(
+        "/api/documents/uploads",
+        json={
+            "game_id": game["id"],
+            "role": "core",
+            "filename": "book.txt",
+            "size": 10,
+        },
+    ).json()
+    upload_id = init["upload_id"]
+
+    # Out-of-order chunk.
+    response = client.put(
+        f"/api/documents/uploads/{upload_id}?offset=5", content=b"abc"
+    )
+    assert response.status_code == 409
+
+    # Finishing before all bytes arrived.
+    response = client.put(
+        f"/api/documents/uploads/{upload_id}?offset=0", content=b"12345"
+    )
+    assert response.status_code == 200
+    assert client.post(f"/api/documents/uploads/{upload_id}/complete").status_code == 400
+
+    # Cancelling removes the pending upload.
+    assert client.delete(f"/api/documents/uploads/{upload_id}").status_code == 200
+    assert (
+        client.put(f"/api/documents/uploads/{upload_id}?offset=0", content=b"x").status_code
+        == 404
+    )
 
 
 def test_thumbnail_is_generated_and_removed(client, game):
