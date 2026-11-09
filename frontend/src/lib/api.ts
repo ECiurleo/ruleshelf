@@ -401,6 +401,13 @@ export interface AskHandlers {
   }) => void;
   onToken: (text: string) => void;
   onError: (message: string) => void;
+  onCommunitySearch?: () => void;
+  onCommunitySources?: (payload: {
+    sources: SearchResult[];
+    count: number;
+    note: string | null;
+  }) => void;
+  onCommunityNote?: (note: string | null) => void;
   onCommunityStart?: (payload: { count: number; ref_start: number }) => void;
   onCommunityToken?: (text: string) => void;
   onCommunityError?: (message: string) => void;
@@ -456,6 +463,14 @@ export async function ask(
       handlers.onToken((data as { t: string }).t);
     } else if (event === "error") {
       handlers.onError((data as { message: string }).message);
+    } else if (event === "community_search") {
+      handlers.onCommunitySearch?.();
+    } else if (event === "community_sources") {
+      handlers.onCommunitySources?.(
+        data as { sources: SearchResult[]; count: number; note: string | null },
+      );
+    } else if (event === "community_note") {
+      handlers.onCommunityNote?.((data as { note: string | null }).note);
     } else if (event === "community_start") {
       handlers.onCommunityStart?.(
         data as { count: number; ref_start: number },

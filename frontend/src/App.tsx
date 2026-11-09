@@ -388,6 +388,28 @@ export default function App() {
             setAnswer(answerRef.current);
           },
           onError: (message) => setSearchError(message),
+          onCommunitySearch: () => {
+            communityRef.current = "";
+            setCommunityAnswer("");
+            setCommunityError("");
+            setCommunityStreaming(true);
+          },
+          onCommunitySources: (payload) => {
+            setResults((existing) => [...existing, ...payload.sources]);
+            setMeta((existing) =>
+              existing
+                ? {
+                    ...existing,
+                    bgg_count: payload.count,
+                    bgg_note: payload.note,
+                  }
+                : existing,
+            );
+          },
+          onCommunityNote: (note) => {
+            setMeta((existing) => (existing ? { ...existing, bgg_note: note } : existing));
+            setCommunityStreaming(false);
+          },
           onCommunityStart: () => {
             communityRef.current = "";
             setCommunityAnswer("");

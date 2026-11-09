@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import threading
 from itertools import combinations
 
 from fastapi import APIRouter, HTTPException, Query
@@ -258,36 +259,41 @@ def ask(payload: AskRequest):
             raise HTTPException(exc.status_code, exc.message) from exc
         embedding_info = _embedding_info(embedding, mode_used)
 
-        bgg_results: list[dict] = []
-        bgg_note: str | None = None
-        if payload.include_bgg:
-            game_row = (
-                conn.execute(
-                    "SELECT title, game_type FROM games WHERE id = ?", (payload.game_id,)
-                ).fetchone()
-                if payload.game_id
-                else None
-            )
-            game_title = game_row["title"] if game_row else None
-            bgg_results, bgg_note = search_bgg(payload.query, game_title, limit=5)
-            for result in bgg_results:
-                result["game"] = {
+        # BGG is a second, separate search. Run it alongside the official
+        # answer so the referee answer never waits for the forum lookup.
+        game_row = (
+            conn.execute(
+                "SELECT title, game_type FROM games WHERE id = ?", (payload.game_id,)
+            ).fetchone()
+            if payload.include_bgg and payload.game_id
+            else None
+        )
+        game_title = game_row["title"] if game_row else None
+        game_type = game_row["game_type"] if game_row else "other"
+        bgg_state: dict = {"results": [], "note": None}
+        bgg_thread: threading.Thread | None = None
+
+        def _run_bgg() -> None:
+            try:
+                found, bgg_note = search_bgg(payload.query, game_title, limit=5)
+            except Exception:  # noqa: BLE001 - optional source must not fail the answer
+                found, bgg_note = [], "BGG web search was unavailable."
+            for item in found:
+                item["game"] = {
                     "id": payload.game_id or "",
                     "title": game_title or "BoardGameGeek",
-                    "game_type": game_row["game_type"] if game_row else "other",
+                    "game_type": game_type,
                 }
+            bgg_state["results"] = found
+            bgg_state["note"] = bgg_note
+
+        if payload.include_bgg:
+            bgg_thread = threading.Thread(target=_run_bgg, daemon=True)
+            bgg_thread.start()
 
         # The official answer uses rulebooks only; forum posts get their own
         # answer underneath so readers can tell the two apart.
         messages, used = build_messages(conn, payload.query, results, payload.history)
-        community_messages, community_used = build_community_messages(
-            conn,
-            payload.query,
-            bgg_results,
-            payload.history,
-            start_ref=len(used) + 1,
-        )
-        all_used = used + community_used
         temperature = (
             payload.temperature
             if payload.temperature is not None
@@ -299,15 +305,15 @@ def ask(payload: AskRequest):
         yield _sse(
             "sources",
             {
-                "sources": [_public_result(result) for result in all_used],
+                "sources": [_public_result(result) for result in used],
                 "mode_used": mode_used,
                 "note": note,
                 "provider": provider_name,
                 "model": model,
                 "embedding": embedding_info,
                 "expanded_queries": expanded_queries,
-                "bgg_count": len(bgg_results),
-                "bgg_note": bgg_note,
+                "bgg_count": 0,
+                "bgg_note": None,
             },
         )
         answered = False
@@ -332,6 +338,41 @@ def ask(payload: AskRequest):
             references = references_markdown(used, refs=cited or None)
             if references:
                 yield _sse("token", {"t": references})
+
+        community_messages: list[dict] = []
+        community_used: list[dict] = []
+        if payload.include_bgg:
+            yield _sse("community_search", {})
+            if bgg_thread is not None:
+                bgg_thread.join()
+            bgg_results = bgg_state["results"]
+            bgg_note = bgg_state["note"]
+
+            if bgg_results:
+                community_messages, community_used = build_community_messages(
+                    conn,
+                    payload.query,
+                    bgg_results,
+                    payload.history,
+                    start_ref=len(used) + 1,
+                )
+                if community_used:
+                    yield _sse(
+                        "community_sources",
+                        {
+                            "sources": [
+                                _public_result(result) for result in community_used
+                            ],
+                            "count": len(community_used),
+                            "note": bgg_note,
+                        },
+                    )
+            else:
+                community_messages, community_used = [], []
+                yield _sse(
+                    "community_note",
+                    {"note": bgg_note or "No BGG forum threads found for this question."},
+                )
 
         if community_used and community_messages:
             ref_start = community_used[0]["ref"]
