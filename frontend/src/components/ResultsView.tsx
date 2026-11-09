@@ -288,7 +288,7 @@ export function ResultsView({
               <Icon name="external" size={17} />
             </span>
             <span>Community Answer</span>
-            <span className="community-badge">Unofficial · BGG forums</span>
+            <span className="community-badge">Unofficial · BGG &amp; Reddit</span>
             {communityStreaming && <span className="spinner" />}
           </div>
           <div className="answer-body">
