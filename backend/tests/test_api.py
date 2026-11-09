@@ -555,54 +555,57 @@ def test_community_prompt_excludes_official_history():
     assert "Do not use earlier turns as sources" in prompt
 
 
-def test_reddit_settings_are_redacted_and_kept(client):
+def test_reddit_toggle_setting(client):
     saved = client.put(
-        "/api/settings",
-        json={
-            "reddit_client_id": "reddit-client",
-            "reddit_client_secret": "super-secret",
-            "reddit_enabled": True,
-        },
+        "/api/settings", json={"reddit_enabled": False}
     ).json()
-    assert saved["settings"]["reddit_client_secret"] == ""
-    assert saved["settings"]["reddit_secret_set"] == "1"
-    assert saved["info"]["reddit_ready"] is True
+    assert saved["info"]["reddit_enabled"] is False
+    saved = client.put("/api/settings", json={"reddit_enabled": True}).json()
     assert saved["info"]["reddit_enabled"] is True
-
-    # A blank secret on the next save must not wipe the stored one.
-    kept = client.put(
-        "/api/settings",
-        json={"reddit_client_id": "reddit-client", "reddit_client_secret": ""},
-    ).json()
-    assert kept["settings"]["reddit_secret_set"] == "1"
 
 
 def test_reddit_result_is_labelled_and_linked():
-    from app.services.reddit import _result
+    from app.services.reddit import _make_result
 
-    result = _result(
-        {
-            "id": "abc123",
-            "permalink": "/r/EarthborneRangers/comments/abc123/flood_timing/",
-            "title": "Flood &amp; setup timing",
-            "selftext": "The flood is added after setup.",
-            "subreddit": "EarthborneRangers",
-        }
+    result = _make_result(
+        "Flood errata",
+        "https://www.reddit.com/r/Earthborne_Rangers/comments/17htk3n/flood_errata/",
+        "Does the errata for Flood apply to both cards?",
     )
     assert result is not None
     assert result["source_type"] == "reddit"
-    assert result["url"].startswith("https://www.reddit.com/r/EarthborneRangers/")
-    assert result["document"]["title"] == "Flood & setup timing"
-    assert result["document"]["role_label"] == "Reddit · r/EarthborneRangers"
-    assert result["snippet"] == "The flood is added after setup."
+    assert result["url"].startswith("https://www.reddit.com/r/Earthborne_Rangers/")
+    assert result["document"]["title"] == "Flood errata"
+    assert result["document"]["role_label"] == "Reddit · r/Earthborne_Rangers"
 
 
-def test_reddit_without_credentials_is_optional():
-    from app.services.reddit import search_reddit
+def test_reddit_plain_search_filters_by_game(monkeypatch):
+    from app.services import reddit
 
-    results, note = search_reddit("Earthborne Rangers flood", "Earthborne Rangers", 3)
-    assert results == []
-    assert "Reddit API app" in note
+    def fake_yahoo(query: str, limit: int = 10) -> list[dict]:
+        return [
+            {
+                "title": "Flood errata",
+                "url": "https://www.reddit.com/r/Earthborne_Rangers/comments/17htk3n/flood_errata/",
+                "snippet": "Does the errata for Flood apply to both cards?",
+            },
+            {
+                "title": "Forbidden Island flood",
+                "url": "https://www.reddit.com/r/boardgames/comments/donr9j/forbidden/",
+                "snippet": "An unrelated flood card question.",
+            },
+        ]
+
+    monkeypatch.setattr(reddit, "search_yahoo", fake_yahoo)
+    results, note = reddit.search_reddit(
+        "unique flood errata question about Earthborne Rangers",
+        "Earthborne Rangers",
+        3,
+    )
+    assert note is None
+    assert len(results) == 1
+    assert results[0]["document"]["title"] == "Flood errata"
+    assert "Earthborne_Rangers" in results[0]["url"]
 
 
 def test_reddit_queries_use_game_and_question_terms():
@@ -614,8 +617,10 @@ def test_reddit_queries_use_game_and_question_terms():
         "Earthborne Rangers",
     )
     assert len(queries) <= 6
-    assert queries[0].startswith("if i draw")
-    assert any(query.startswith("Earthborne Rangers") for query in queries)
+    assert any(
+        query.startswith('site:reddit.com "Earthborne Rangers"') for query in queries
+    )
+    assert any("flood" in query.lower() for query in queries)
 
 
 def test_rag_marks_reddit_sources_as_unofficial():

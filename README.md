@@ -38,13 +38,11 @@ docker compose up -d      # then open http://localhost:8080
   the sidebar (and top bar). The choice is remembered per browser and follows the system theme on
   first visit.
 - **Optional community search.** *Community* is on by default; switch it off to skip it. It adds
-  BoardGameGeek thread snippets from a web search and, when configured, Reddit posts through Reddit's
-  official OAuth API. Community results are highlighted as unofficial, while rulebook excerpts are
+  BoardGameGeek thread snippets and Reddit posts found through plain web search, with no account,
+  API key or password. Community results are highlighted as unofficial, while rulebook excerpts are
   always authoritative and ranked first, and the AI writes a separate **Community Answer** from the
-  threads underneath the official answer. BGG needs no API token. Reddit needs a free Reddit API app:
-  create one at `reddit.com/prefs/apps` (type **script**, redirect URI `http://localhost:8080`) and
-  paste its client ID and secret in **Settings → Search & answers → Community search**. Only public
-  posts are read; no Reddit password is stored.
+  threads underneath the official answer. Reddit is searched through public search results
+  (`site:reddit.com`), so only titles, URLs and snippets are used — Reddit pages are never scraped.
 - **Bring your own model.** Built-in support for **Ollama** (free/local), **OpenAI/ChatGPT**,
   **Anthropic Claude**, **DeepSeek** and **Qwen/DashScope**, plus any OpenAI-compatible endpoint
   (OpenRouter, LM Studio, vLLM, LiteLLM, Azure gateways…). Adding another API dialect is one file.

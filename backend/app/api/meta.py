@@ -36,10 +36,9 @@ EDITABLE_SETTINGS = {
     "rag_temperature",
     "system_prompt",
     "reddit_enabled",
-    "reddit_client_id",
-    "reddit_client_secret",
 }
 
+# Kept for older config snapshots that may still contain the removed fields.
 SECRET_SETTINGS = {"reddit_client_secret"}
 
 
@@ -86,8 +85,6 @@ class SettingsUpdate(BaseModel):
     rag_temperature: float | None = Field(default=None, ge=0, le=2)
     system_prompt: str | None = Field(default=None, max_length=8000)
     reddit_enabled: bool | None = None
-    reddit_client_id: str | None = Field(default=None, max_length=200)
-    reddit_client_secret: str | None = Field(default=None, max_length=400)
 
 
 def _settings_payload(conn: sqlite3.Connection) -> dict:
@@ -96,7 +93,6 @@ def _settings_payload(conn: sqlite3.Connection) -> dict:
         key: ("" if key in SECRET_SETTINGS else value)
         for key, value in stored.items()
     }
-    settings["reddit_secret_set"] = "1" if stored.get("reddit_client_secret") else "0"
     # Show the prompt the model actually receives, including the timing rule
     # appended to older stored prompts.
     settings["system_prompt"] = effective_system_prompt(conn)
@@ -143,9 +139,6 @@ def _settings_payload(conn: sqlite3.Connection) -> dict:
             "chat_ready": chat_ready,
             "chat_model_active": chat_model,
             "provider_names": provider_names,
-            "reddit_ready": bool(
-                stored.get("reddit_client_id") and stored.get("reddit_client_secret")
-            ),
             "reddit_enabled": stored.get("reddit_enabled", "1") != "0",
         },
     }
@@ -170,8 +163,6 @@ def update_settings(payload: SettingsUpdate):
                 ).fetchone()
                 if not exists:
                     raise HTTPException(400, f"Provider '{value}' is not available.")
-            if key == "reddit_client_secret" and not str(value).strip():
-                continue
             if isinstance(value, bool):
                 value = "1" if value else "0"
             set_setting(conn, key, str(value))

@@ -279,8 +279,6 @@ def ask(payload: AskRequest):
             "reddit_note": None,
         }
         community_threads: list[threading.Thread] = []
-        reddit_id = get_setting(conn, "reddit_client_id", "") or ""
-        reddit_secret = get_setting(conn, "reddit_client_secret", "") or ""
         reddit_enabled = (get_setting(conn, "reddit_enabled", "1") or "1") != "0"
 
         def _attach_game(found: list[dict], fallback: str) -> None:
@@ -302,13 +300,7 @@ def ask(payload: AskRequest):
 
         def _run_reddit() -> None:
             try:
-                found, note = search_reddit(
-                    payload.query,
-                    game_title,
-                    limit=3,
-                    client_id=reddit_id,
-                    client_secret=reddit_secret,
-                )
+                found, note = search_reddit(payload.query, game_title, limit=3)
             except Exception:  # noqa: BLE001 - optional source must not fail the answer
                 found, note = [], "Reddit search was unavailable."
             _attach_game(found, "Reddit")
@@ -317,9 +309,7 @@ def ask(payload: AskRequest):
 
         if payload.include_bgg:
             for target in (_run_bgg, _run_reddit):
-                if target is _run_reddit and (
-                    not reddit_enabled or not reddit_id or not reddit_secret
-                ):
+                if target is _run_reddit and not reddit_enabled:
                     continue
                 thread = threading.Thread(target=target, daemon=True)
                 community_threads.append(thread)

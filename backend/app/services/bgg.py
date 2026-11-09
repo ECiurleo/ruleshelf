@@ -20,6 +20,8 @@ from urllib.parse import parse_qs, unquote, urlencode, urlparse
 import httpx
 from bs4 import BeautifulSoup
 
+from app.services.websearch import search_yahoo
+
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120 Safari/537.36"
@@ -89,6 +91,22 @@ def _make_result(title: str, url: str, snippet: str) -> dict | None:
             "overrides": False,
         },
     }
+
+
+def _yahoo_bgg(search_query: str, limit: int) -> list[dict]:
+    results: list[dict] = []
+    seen: set[str] = set()
+    for item in search_yahoo(search_query, max(limit * 2, 10)):
+        url = item["url"]
+        if "boardgamegeek.com/thread/" not in url or url in seen:
+            continue
+        seen.add(url)
+        result = _make_result(item["title"], url, item["snippet"])
+        if result:
+            results.append(result)
+        if len(results) >= limit:
+            break
+    return results
 
 
 def _bing_rss(search_query: str, limit: int) -> list[dict]:
@@ -258,7 +276,7 @@ def search_bgg(query: str, game_title: str | None = None, limit: int = 5) -> tup
     # keeps the number of requests low, which matters because both engines
     # rate-limit aggressive scrapers, and the deadline keeps a slow engine
     # from holding the community panel open indefinitely.
-    for searcher in (_bing_rss, _duckduckgo):
+    for searcher in (_yahoo_bgg, _bing_rss, _duckduckgo):
         for search_query in searches:
             if time.monotonic() >= deadline:
                 note = "BGG search timed out; the rulebook answer is unaffected."

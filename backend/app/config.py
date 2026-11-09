@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 APP_NAME = "Ruleshelf"
-APP_VERSION = "0.10.0"
+APP_VERSION = "0.10.1"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

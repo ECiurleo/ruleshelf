@@ -174,7 +174,6 @@ export interface AppSettings {
     chat_ready: boolean;
     chat_model_active: string;
     provider_names: Record<string, string>;
-    reddit_ready: boolean;
     reddit_enabled: boolean;
   };
 }
