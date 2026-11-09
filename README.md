@@ -15,7 +15,9 @@ docker compose up -d      # then open http://localhost:8080
 - **One shelf per game.** Each game has a typed structure: a core rule set (the primary source),
   supplements/expansions (bestiaries, army books) and campaigns (separate from the rules).
 - **Uploads stay yours.** PDFs, EPUB, DOCX, Markdown, text and HTML are stored on disk and indexed
-  into a local SQLite database. Nothing leaves your machine unless you call an AI provider.
+  into a local SQLite database. Maps and handouts can be uploaded as images: stored, previewed and
+  filed with their scenario, but deliberately not text-indexed until you OCR them. Nothing leaves
+  your machine unless you call an AI provider.
 - **Errata wins.** File official corrections under **Errata**: they are boosted above the core rules
   in every search mode, flagged with an "overrides core rules" badge, and the AI is instructed to
   treat them as superseding where the texts conflict. Every answer says when errata took precedence.
@@ -32,8 +34,9 @@ docker compose up -d      # then open http://localhost:8080
   References block listing the document, page and a link to the source.
 - **Reader built in.** Open any result in a drawer, read the page, jump to the original PDF at that
   page, or download the file.
-- **Cover view.** Generated thumbnails from PDF/EPUB covers (and typographic cards for other
-  formats) in a cover grid with actions overlaid on each book, or a compact list with small covers.
+- **Cover view.** Generated thumbnails from PDF/EPUB covers and images (typographic cards for
+  other formats) in a cover grid with actions overlaid on each book, or a compact list with small
+  covers.
 - **Light and dark themes.** A warm paper light theme and the original dark theme, with a toggle in
   the sidebar (and top bar). The choice is remembered per browser and follows the system theme on
   first visit.
@@ -333,8 +336,12 @@ them into a group. Deleting a campaign keeps its documents and ungroups them.
 | `.docx` | Grouped by heading. |
 | `.txt`, `.md`, `.rst` | A form feed (`\f`) starts a new page. |
 | `.html`, `.htm` | Readable text is extracted. |
+| `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff` | Stored and previewed but **not indexed** — no OCR runs on upload. Use these for maps, handouts and card scans; OCR them and upload the PDF if you want them searchable. |
 
-Maximum upload size is 512 MB per file (`RULESHELF_MAX_UPLOAD_MB` to change it).
+Maximum upload size is 512 MB per file (`RULESHELF_MAX_UPLOAD_MB` to change it). If a large file
+fails with **413**, the limit being hit is usually in front of Ruleshelf: Cloudflare rejects request
+bodies over 100 MB on every plan, and nginx defaults are often lower (`client_max_body_size 512m;`).
+Raise the proxy limit or upload over the local network.
 
 ## Data, backup and privacy
 
@@ -468,6 +475,9 @@ Other extension points: `services/chunking.py` (splitting), `services/search.py`
   `extra_hosts: host.docker.internal:host-gateway` (already in the compose file), and make sure
   Ollama listens on all interfaces (`OLLAMA_HOST=0.0.0.0`).
 - **PDF indexed 0 pages.** It is a scan without a text layer; OCR it first.
+- **413 on a large PDF.** Ruleshelf's own limit is 512 MB, so a bare 413 almost always comes from a
+  reverse proxy. Cloudflare caps request bodies at 100 MB; for nginx set
+  `client_max_body_size 512m;` (and reload). Uploading directly on the LAN bypasses the proxy.
 - **Changed the embedding model and search feels wrong.** Settings → Search & answers →
   *Re-embed everything*.
 - **Permission denied on a bind mount.** The container runs as UID 1000; `chown -R 1000:1000` the

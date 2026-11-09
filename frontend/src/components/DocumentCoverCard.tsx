@@ -8,6 +8,7 @@ const STATUS_LABEL: Record<Document["status"], string> = {
   processing: "Indexing…",
   ready: "Ready",
   error: "Failed",
+  unindexed: "Not indexed",
 };
 
 export function DocumentCoverCard({
@@ -79,8 +80,8 @@ export function DocumentCoverCard({
                 <button
                   className="icon-button"
                   onClick={onReindex}
-                  disabled={busy}
-                  title="Re-index"
+                  disabled={busy || !doc.indexed}
+                  title={doc.indexed ? "Re-index" : "Stored only — no text to index"}
                   aria-label="Re-index"
                 >
                   <Icon name="refresh" size={15} />

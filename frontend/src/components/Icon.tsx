@@ -25,7 +25,8 @@ export type IconName =
   | "moon"
   | "lock"
   | "logout"
-  | "user";
+  | "user"
+  | "image";
 
 const paths: Record<IconName, React.ReactNode> = {
   search: (
@@ -38,6 +39,13 @@ const paths: Record<IconName, React.ReactNode> = {
     <>
       <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
       <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5A2.5 2.5 0 0 1 4 20.5z" />
+    </>
+  ),
+  image: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <circle cx="8.5" cy="9.5" r="1.5" />
+      <path d="m21 15-5-5L5 20" />
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,

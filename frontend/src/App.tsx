@@ -484,6 +484,11 @@ export default function App() {
   };
 
   const openReaderForDocument = (doc: Document) => {
+    if (!doc.indexed) {
+      // Stored-only files (maps, handouts) have no text to page through.
+      window.open(api.fileUrl(doc.id), "_blank", "noopener,noreferrer");
+      return;
+    }
     const game = games.find((entry) => entry.id === doc.game_id);
     const type = gameTypes.find((entry) => entry.id === game?.game_type);
     setReader({
@@ -895,6 +900,7 @@ export default function App() {
           game={activeGame}
           gameType={activeGameType}
           formats={bundle?.info.formats ?? []}
+          maxUploadMb={bundle?.info.max_upload_mb ?? 512}
           campaigns={campaigns}
           documents={documents}
           initialRole={uploadRole}

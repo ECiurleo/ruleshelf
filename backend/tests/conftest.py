@@ -124,6 +124,9 @@ def upload_document(
     title: str = "Core Rules",
     campaign_id: str | None = None,
     scenario_id: str | None = None,
+    content: bytes | None = None,
+    filename: str | None = None,
+    content_type: str = "text/plain",
 ):
     data = {"game_id": game_id, "role": role, "title": title}
     if campaign_id:
@@ -133,7 +136,13 @@ def upload_document(
     response = client.post(
         "/api/documents",
         data=data,
-        files={"file": (f"{uuid.uuid4().hex}.txt", make_text_document(), "text/plain")},
+        files={
+            "file": (
+                filename or f"{uuid.uuid4().hex}.txt",
+                content if content is not None else make_text_document(),
+                content_type,
+            )
+        },
     )
     assert response.status_code == 201, response.text
     return response.json()

@@ -16,6 +16,9 @@ class ExtractorSpec:
     label: str
     func: Extractor
     description: str = ""
+    # False for files that are stored and previewed but never text-indexed
+    # (maps, handouts and other images).
+    indexed: bool = True
 
 
 _EXTRACTORS: dict[str, ExtractorSpec] = {}
@@ -26,12 +29,14 @@ def register_extractor(
     label: str,
     func: Extractor,
     description: str = "",
+    indexed: bool = True,
 ) -> None:
     spec = ExtractorSpec(
         extensions=tuple(ext.lower().lstrip(".") for ext in extensions),
         label=label,
         func=func,
         description=description,
+        indexed=indexed,
     )
     for ext in spec.extensions:
         _EXTRACTORS[ext] = spec
@@ -58,6 +63,7 @@ def supported_extensions() -> list[dict]:
             "extensions": list(spec.extensions),
             "label": spec.label,
             "description": spec.description,
+            "indexed": spec.indexed,
         }
         for spec in sorted(seen.values(), key=lambda s: s.label)
     ]
@@ -72,6 +78,14 @@ def resolve_extension(filename: str) -> str:
             f"Unsupported file type '.{ext}'. Supported: {allowed or 'none'}."
         )
     return ext
+
+
+def is_indexed(filename: str) -> bool:
+    """Whether this file type is text-indexed (images are stored only)."""
+    _discover()
+    ext = Path(filename).suffix.lower().lstrip(".")
+    spec = _EXTRACTORS.get(ext)
+    return spec.indexed if spec else True
 
 
 def extract_file(path: str | Path, original_filename: str | None = None) -> list[ExtractedPage]:

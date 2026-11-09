@@ -19,6 +19,7 @@ THUMB_WIDTH = 480
 JPEG_QUALITY = 82
 PLACEHOLDER_WIDTH = 480
 PLACEHOLDER_HEIGHT = 640
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
 
 
 def _fitz():
@@ -185,6 +186,11 @@ def render_thumbnail(row) -> bytes:
             return _epub_cover(source)
         except Exception as exc:  # noqa: BLE001
             log.warning("Could not extract EPUB cover for %s: %s", row["id"], exc)
+    if source and source.exists() and extension in IMAGE_EXTENSIONS:
+        try:
+            return _encode_image_bytes(source.read_bytes())
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Could not render image thumbnail for %s: %s", row["id"], exc)
 
     return _placeholder(row)
 

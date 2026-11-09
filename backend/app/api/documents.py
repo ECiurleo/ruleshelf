@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from app.auth import require_admin
 from app.config import FILES_DIR, MAX_UPLOAD_BYTES
 from app.db import db, get_setting, utcnow
-from app.extractors import resolve_extension
+from app.extractors import is_indexed, resolve_extension
 from app.services.ingest import submit_ingest, unindex_document
 from app.services.thumbnails import delete_thumbnail, ensure_thumbnail
 
@@ -68,6 +68,7 @@ def _doc_payload(conn, row, embedding_model: str) -> dict:
         "campaign_title": campaign_title,
         "scenario_id": row["scenario_id"],
         "file_count": file_count,
+        "indexed": is_indexed(row["original_filename"]),
         "sort_order": row["sort_order"],
         "original_filename": row["original_filename"],
         "content_type": row["content_type"],
@@ -126,6 +127,7 @@ async def upload_document(
 ):
     filename = file.filename or "upload"
     ext = resolve_extension(filename)
+    indexed = is_indexed(filename)
     campaign_id = campaign_id.strip() or None
     scenario_id = scenario_id.strip() or None
     with db() as conn:
@@ -204,7 +206,7 @@ async def upload_document(
             INSERT INTO documents (
                 id, game_id, title, role, campaign_id, scenario_id, sort_order,
                 original_filename, stored_name, content_type, size_bytes, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 document_id,
@@ -218,6 +220,7 @@ async def upload_document(
                 stored_name,
                 content_type,
                 size,
+                "pending" if indexed else "unindexed",
                 utcnow(),
             ),
         )
@@ -227,7 +230,8 @@ async def upload_document(
             (document_id,),
         ).fetchone()
         payload = _doc_payload(conn, row, get_setting(conn, "embedding_model"))
-    submit_ingest(document_id)
+    if indexed:
+        submit_ingest(document_id)
     return payload
 
 
@@ -393,9 +397,17 @@ def delete_document(document_id: str):
 @router.post("/{document_id}/reindex", dependencies=[Depends(require_admin)])
 def reindex_document(document_id: str):
     with db() as conn:
-        row = conn.execute("SELECT id FROM documents WHERE id = ?", (document_id,)).fetchone()
+        row = conn.execute(
+            "SELECT id, original_filename FROM documents WHERE id = ?", (document_id,)
+        ).fetchone()
         if not row:
             raise HTTPException(404, "Document not found.")
+        if not is_indexed(row["original_filename"]):
+            raise HTTPException(
+                400,
+                "This file type is stored for browsing only and is not indexed. "
+                "Run OCR on it and upload the resulting PDF or text to make it searchable.",
+            )
         conn.execute(
             "UPDATE documents SET status = 'pending', error = NULL WHERE id = ?", (document_id,)
         )

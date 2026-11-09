@@ -24,6 +24,7 @@ export function UploadDialog({
   game,
   gameType,
   formats,
+  maxUploadMb,
   campaigns,
   documents = [],
   initialRole,
@@ -36,6 +37,7 @@ export function UploadDialog({
   game: Game;
   gameType: GameType | undefined;
   formats: FormatInfo[];
+  maxUploadMb: number;
   campaigns: Campaign[];
   documents?: Document[];
   initialRole: string;
@@ -52,6 +54,7 @@ export function UploadDialog({
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rejected, setRejected] = useState<string[]>([]);
+  const [tooLarge, setTooLarge] = useState<string[]>([]);
   const [groupFiles, setGroupFiles] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -71,16 +74,23 @@ export function UploadDialog({
   const addFiles = (files: FileList | File[]) => {
     const accepted: QueueItem[] = [];
     const refused: string[] = [];
+    const oversized: string[] = [];
+    const limit = maxUploadMb * 1024 * 1024;
     for (const file of Array.from(files)) {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
       if (!allowed.has(ext)) {
         refused.push(file.name);
         continue;
       }
+      if (file.size > limit) {
+        oversized.push(`${file.name} (${formatBytes(file.size)})`);
+        continue;
+      }
       accepted.push({ id: nextId++, file, status: "queued" });
     }
     setQueue((current) => [...current, ...accepted]);
     setRejected(refused);
+    setTooLarge(oversized);
   };
 
   const remove = (id: number) => {
@@ -124,7 +134,18 @@ export function UploadDialog({
       }
     }
     setBusy(false);
-    notify("Uploads finished. Indexing continues in the background.", "ok");
+    const indexedFormats = new Set(
+      formats.filter((format) => format.indexed).flatMap((format) => format.extensions),
+    );
+    const anyIndexed = pending.some((item) =>
+      indexedFormats.has(item.file.name.split(".").pop()?.toLowerCase() ?? ""),
+    );
+    notify(
+      anyIndexed
+        ? "Uploads finished. Indexing continues in the background."
+        : "Uploads finished. Images are stored and previewed, but not indexed.",
+      "ok",
+    );
   };
 
   const pendingCount = queue.filter((item) => item.status === "queued").length;
@@ -262,6 +283,9 @@ export function UploadDialog({
         <span>
           {formats.map((format) => `.${format.extensions.join(", .")}`).join(" · ")}
         </span>
+        <span className="fine-print">
+          Images (maps, handouts) are stored and previewed but not text-indexed.
+        </span>
         <input
           ref={inputRef}
           type="file"
@@ -277,6 +301,13 @@ export function UploadDialog({
       {rejected.length > 0 && (
         <p className="form-error">
           Unsupported: {rejected.join(", ")}. Convert them to PDF first.
+        </p>
+      )}
+
+      {tooLarge.length > 0 && (
+        <p className="form-error">
+          Over the {maxUploadMb} MB limit: {tooLarge.join(", ")}. Raise
+          RULESHELF_MAX_UPLOAD_MB and the reverse proxy's body-size limit to accept them.
         </p>
       )}
 
@@ -321,8 +352,8 @@ export function UploadDialog({
       )}
 
       <p className="fine-print">
-        Scanned PDFs need a text layer; run OCR first. Indexing happens in the background — you
-        can keep using the app.
+        Files up to {maxUploadMb} MB each. Scanned PDFs and images need a text layer (OCR) to be
+        searchable; indexing happens in the background — you can keep using the app.
       </p>
     </Modal>
   );

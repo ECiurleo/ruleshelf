@@ -9,6 +9,7 @@ const STATUS_LABEL: Record<Document["status"], string> = {
   processing: "Indexing…",
   ready: "Ready",
   error: "Failed",
+  unindexed: "Not indexed",
 };
 
 /**
@@ -72,7 +73,7 @@ export function ScenarioGroup({
             return (
               <li key={file.id} className={`scenario-file ${file.status}`}>
                 <span className="scenario-file-icon" aria-hidden="true">
-                  <Icon name="book" size={15} />
+                  <Icon name={file.indexed ? "book" : "image"} size={15} />
                 </span>
                 <div className="scenario-file-body">
                   <button
@@ -115,15 +116,17 @@ export function ScenarioGroup({
                       >
                         <Icon name="edit" size={15} />
                       </button>
-                      <button
-                        className="icon-button small"
-                        onClick={() => onReindexDoc(file)}
-                        disabled={busy}
-                        title="Re-index"
-                        aria-label="Re-index"
-                      >
-                        <Icon name="refresh" size={15} />
-                      </button>
+                      {file.indexed && (
+                        <button
+                          className="icon-button small"
+                          onClick={() => onReindexDoc(file)}
+                          disabled={busy}
+                          title="Re-index"
+                          aria-label="Re-index"
+                        >
+                          <Icon name="refresh" size={15} />
+                        </button>
+                      )}
                       <button
                         className="icon-button small danger"
                         onClick={() => onDeleteDoc(file)}
