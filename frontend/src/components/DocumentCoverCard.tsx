@@ -102,6 +102,7 @@ export function DocumentCoverCard({
           {doc.role === "campaign" && (
             <p className="cover-submeta">
               {doc.campaign_title ?? "Ungrouped campaign"} · Scenario order {doc.sort_order}
+              {doc.file_count ? ` · ${plural(doc.file_count, "file")}` : ""}
             </p>
           )}
           {doc.status !== "ready" && (

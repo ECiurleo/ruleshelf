@@ -27,6 +27,7 @@ class DocumentUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     role: str | None = None
     campaign_id: str | None = None
+    scenario_id: str | None = None
     sort_order: int | None = Field(default=None, ge=0)
 
 
@@ -55,6 +56,9 @@ def _doc_payload(conn, row, embedding_model: str) -> dict:
         campaign_title = row["campaign_title"]
     except (IndexError, KeyError):
         campaign_title = None
+    file_count = conn.execute(
+        "SELECT COUNT(*) AS n FROM documents WHERE scenario_id = ?", (row["id"],)
+    ).fetchone()["n"]
     return {
         "id": row["id"],
         "game_id": row["game_id"],
@@ -62,6 +66,8 @@ def _doc_payload(conn, row, embedding_model: str) -> dict:
         "role": row["role"],
         "campaign_id": row["campaign_id"],
         "campaign_title": campaign_title,
+        "scenario_id": row["scenario_id"],
+        "file_count": file_count,
         "sort_order": row["sort_order"],
         "original_filename": row["original_filename"],
         "content_type": row["content_type"],
@@ -115,12 +121,29 @@ async def upload_document(
     role: str = Form("core"),
     title: str = Form(""),
     campaign_id: str = Form(""),
+    scenario_id: str = Form(""),
     file: UploadFile = File(...),
 ):
     filename = file.filename or "upload"
     ext = resolve_extension(filename)
     campaign_id = campaign_id.strip() or None
+    scenario_id = scenario_id.strip() or None
     with db() as conn:
+        if scenario_id:
+            parent = conn.execute(
+                "SELECT * FROM documents WHERE id = ?", (scenario_id,)
+            ).fetchone()
+            if not parent:
+                raise HTTPException(400, "Scenario not found.")
+            if parent["game_id"] != game_id:
+                raise HTTPException(400, "Scenario belongs to another game.")
+            if parent["role"] != "campaign":
+                raise HTTPException(400, "Only campaign documents can hold scenario files.")
+            if parent["scenario_id"]:
+                raise HTTPException(400, "A scenario file cannot hold its own files.")
+            # Files inherit the scenario's section and campaign.
+            role = "campaign"
+            campaign_id = parent["campaign_id"]
         roles = {r["id"] for r in _roles_for(conn, game_id)}
         if role not in roles:
             raise HTTPException(400, f"Role '{role}' is not valid for this game type.")
@@ -161,19 +184,27 @@ async def upload_document(
 
     with db() as conn:
         sort_order = 0
-        if campaign_id:
+        if scenario_id:
             sort_row = conn.execute(
                 "SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM documents "
-                "WHERE campaign_id = ?",
+                "WHERE scenario_id = ?",
+                (scenario_id,),
+            ).fetchone()
+        elif campaign_id:
+            sort_row = conn.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) + 1 AS n FROM documents "
+                "WHERE campaign_id = ? AND scenario_id IS NULL",
                 (campaign_id,),
             ).fetchone()
-            sort_order = sort_row["n"] if sort_row else 0
+        else:
+            sort_row = None
+        sort_order = sort_row["n"] if sort_row else 0
         conn.execute(
             """
             INSERT INTO documents (
-                id, game_id, title, role, campaign_id, sort_order, original_filename,
-                stored_name, content_type, size_bytes, status, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                id, game_id, title, role, campaign_id, scenario_id, sort_order,
+                original_filename, stored_name, content_type, size_bytes, status, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
             """,
             (
                 document_id,
@@ -181,6 +212,7 @@ async def upload_document(
                 title,
                 role,
                 campaign_id,
+                scenario_id,
                 sort_order,
                 filename,
                 stored_name,
@@ -238,24 +270,70 @@ def update_document(document_id: str, payload: DocumentUpdate):
         raw = payload.model_dump(exclude_unset=True)
         campaign_supplied = "campaign_id" in raw
         campaign_value = raw.pop("campaign_id", None)
+        scenario_supplied = "scenario_id" in raw
+        scenario_value = raw.pop("scenario_id", None)
         fields = {key: value for key, value in raw.items() if value is not None}
         target_role = fields.get("role", row["role"])
+        file_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM documents WHERE scenario_id = ?", (document_id,)
+        ).fetchone()["n"]
 
         if "role" in fields:
             valid = {r["id"] for r in _roles_for(conn, row["game_id"])}
             if fields["role"] not in valid:
                 raise HTTPException(400, f"Role '{fields['role']}' is not valid for this game.")
+            if file_count and fields["role"] != "campaign":
+                raise HTTPException(
+                    400,
+                    "This scenario has attached files; remove them before moving it out of "
+                    "Campaigns.",
+                )
             conn.execute(
                 "UPDATE chunks SET role = ? WHERE document_id = ?",
                 (fields["role"], document_id),
             )
             if target_role != "campaign":
                 conn.execute(
-                    "UPDATE documents SET campaign_id = NULL WHERE id = ?", (document_id,)
+                    "UPDATE documents SET campaign_id = NULL, scenario_id = NULL WHERE id = ?",
+                    (document_id,),
                 )
                 campaign_supplied = False
+                scenario_supplied = False
+
+        if scenario_supplied and scenario_value:
+            if target_role != "campaign":
+                raise HTTPException(400, "Only campaign documents can belong to a scenario.")
+            if file_count:
+                raise HTTPException(
+                    400,
+                    "This scenario already has files; it cannot be attached to another scenario.",
+                )
+            if scenario_value == document_id:
+                raise HTTPException(400, "A scenario cannot contain itself.")
+            parent = conn.execute(
+                "SELECT * FROM documents WHERE id = ?", (scenario_value,)
+            ).fetchone()
+            if not parent or parent["game_id"] != row["game_id"]:
+                raise HTTPException(400, "Scenario not found for this game.")
+            if parent["role"] != "campaign":
+                raise HTTPException(400, "Only campaign documents can hold scenario files.")
+            if parent["scenario_id"]:
+                raise HTTPException(400, "A scenario file cannot hold its own files.")
+            conn.execute(
+                "UPDATE documents SET scenario_id = ?, campaign_id = ? WHERE id = ?",
+                (scenario_value, parent["campaign_id"], document_id),
+            )
+            campaign_supplied = False
+        elif scenario_supplied:
+            conn.execute(
+                "UPDATE documents SET scenario_id = NULL WHERE id = ?", (document_id,)
+            )
 
         if campaign_supplied:
+            if row["scenario_id"] and not scenario_supplied:
+                raise HTTPException(
+                    400, "This file belongs to a scenario; move the whole scenario instead."
+                )
             if campaign_value:
                 if target_role != "campaign":
                     raise HTTPException(400, "Only campaign documents can belong to a campaign.")
@@ -269,6 +347,11 @@ def update_document(document_id: str, payload: DocumentUpdate):
                 "UPDATE documents SET campaign_id = ? WHERE id = ?",
                 (campaign_value or None, document_id),
             )
+            if file_count:
+                conn.execute(
+                    "UPDATE documents SET campaign_id = ? WHERE scenario_id = ?",
+                    (campaign_value or None, document_id),
+                )
 
         if "title" in fields:
             fields["title"] = fields["title"].strip()
@@ -292,12 +375,19 @@ def delete_document(document_id: str):
         row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
         if not row:
             raise HTTPException(404, "Document not found.")
+        children = conn.execute(
+            "SELECT * FROM documents WHERE scenario_id = ?", (document_id,)
+        ).fetchall()
+        for child in children:
+            unindex_document(conn, child["id"])
         unindex_document(conn, document_id)
+        conn.execute("DELETE FROM documents WHERE scenario_id = ?", (document_id,))
         conn.execute("DELETE FROM documents WHERE id = ?", (document_id,))
-    if row["stored_name"]:
-        (FILES_DIR / row["stored_name"]).unlink(missing_ok=True)
-    delete_thumbnail(document_id)
-    return {"deleted": True}
+    for item in (row, *children):
+        if item["stored_name"]:
+            (FILES_DIR / item["stored_name"]).unlink(missing_ok=True)
+        delete_thumbnail(item["id"])
+    return {"deleted": True, "files_deleted": len(children)}
 
 
 @router.post("/{document_id}/reindex", dependencies=[Depends(require_admin)])

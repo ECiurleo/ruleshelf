@@ -123,10 +123,13 @@ def upload_document(
     role: str = "core",
     title: str = "Core Rules",
     campaign_id: str | None = None,
+    scenario_id: str | None = None,
 ):
     data = {"game_id": game_id, "role": role, "title": title}
     if campaign_id:
         data["campaign_id"] = campaign_id
+    if scenario_id:
+        data["scenario_id"] = scenario_id
     response = client.post(
         "/api/documents",
         data=data,

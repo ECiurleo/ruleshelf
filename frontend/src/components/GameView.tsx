@@ -35,7 +35,7 @@ export function GameView({
   campaigns: Campaign[];
   embeddingConfigured: boolean;
   canWrite?: boolean;
-  onUpload: (role: string, campaignId?: string | null) => void;
+  onUpload: (role: string, campaignId?: string | null, scenarioId?: string | null) => void;
   onEdit: () => void;
   onDelete: () => void;
   onCampaignCreate: () => void;
@@ -87,6 +87,8 @@ export function GameView({
   const errataCount = documents.filter((doc) => doc.role === "errata").length;
 
   const campaignDocs = documents.filter((doc) => doc.role === "campaign");
+  const scenarioDocs = campaignDocs.filter((doc) => !doc.scenario_id);
+  const scenarioFiles = campaignDocs.length - scenarioDocs.length;
   const campaignIds = new Set(campaigns.map((campaign) => campaign.id));
   const ungrouped = campaignDocs.filter(
     (doc) => !doc.campaign_id || !campaignIds.has(doc.campaign_id),
@@ -216,7 +218,8 @@ export function GameView({
                     <div className="role-heading-right">
                       <span className="role-count">
                         {plural(campaignCount, "campaign")} ·{" "}
-                        {plural(campaignDocs.length, "book")}
+                        {plural(scenarioDocs.length, "scenario")}
+                        {scenarioFiles > 0 ? ` · ${plural(scenarioFiles, "file")}` : ""}
                       </span>
                       {canWrite && (
                         <button className="button ghost small" onClick={onCampaignCreate}>
@@ -240,7 +243,9 @@ export function GameView({
                           onToggleCollapsed={() =>
                             toggleCollapsed(group.campaign?.id ?? "ungrouped")
                           }
-                          onUpload={(campaignId) => onUpload("campaign", campaignId)}
+                          onUpload={(campaignId, scenarioId) =>
+                            onUpload("campaign", campaignId, scenarioId)
+                          }
                           onEdit={group.campaign ? onCampaignEdit : undefined}
                           onDelete={group.campaign ? onCampaignDelete : undefined}
                           onOpenDoc={onOpenDoc}
@@ -258,8 +263,8 @@ export function GameView({
                       <h2>Group campaigns into scenarios</h2>
                       <p>
                         Create a campaign such as <em>The Enemy Within</em>, then add each
-                        scenario as its own document. Existing campaign books can be assigned
-                        from each book's campaign menu.
+                        scenario as its own document. Maps, handouts and card decks can be
+                        attached to a scenario as extra files.
                       </p>
                       {canWrite && (
                         <button className="button primary" onClick={onCampaignCreate}>

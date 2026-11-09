@@ -3,6 +3,7 @@ import {
   api,
   formatBytes,
   type Campaign,
+  type Document,
   type FormatInfo,
   type Game,
   type GameType,
@@ -24,8 +25,10 @@ export function UploadDialog({
   gameType,
   formats,
   campaigns,
+  documents = [],
   initialRole,
   initialCampaignId,
+  initialScenarioId,
   onClose,
   onUploaded,
   notify,
@@ -34,19 +37,33 @@ export function UploadDialog({
   gameType: GameType | undefined;
   formats: FormatInfo[];
   campaigns: Campaign[];
+  documents?: Document[];
   initialRole: string;
   initialCampaignId?: string | null;
+  initialScenarioId?: string | null;
   onClose: () => void;
   onUploaded: () => void;
   notify: (message: string, kind?: "ok" | "error") => void;
 }) {
   const [role, setRole] = useState(initialRole);
   const [campaignId, setCampaignId] = useState(initialCampaignId ?? "");
+  const [scenarioId, setScenarioId] = useState(initialScenarioId ?? "");
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rejected, setRejected] = useState<string[]>([]);
+  const [groupFiles, setGroupFiles] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const lockedScenario = initialScenarioId
+    ? documents.find((doc) => doc.id === initialScenarioId) ?? null
+    : null;
+  const scenarioOptions = documents.filter(
+    (doc) =>
+      doc.role === "campaign" &&
+      !doc.scenario_id &&
+      (doc.campaign_id ?? "") === campaignId,
+  );
 
   const allowed = new Set(formats.flatMap((format) => format.extensions));
   const roles = gameType?.roles ?? [{ id: "core", label: "Core rules" }];
@@ -74,18 +91,24 @@ export function UploadDialog({
     const pending = queue.filter((item) => item.status === "queued");
     if (!pending.length) return;
     setBusy(true);
+    let targetScenario = lockedScenario?.id ?? (role === "campaign" ? scenarioId || null : null);
     for (const item of pending) {
       setQueue((current) =>
         current.map((entry) => (entry.id === item.id ? { ...entry, status: "uploading" } : entry)),
       );
       try {
-        await api.uploadDocument(
+        const created = await api.uploadDocument(
           game.id,
           role,
           item.file,
           undefined,
           role === "campaign" ? campaignId || null : null,
+          targetScenario,
         );
+        if (role === "campaign" && groupFiles && !targetScenario) {
+          // The first file becomes the scenario the rest are filed under.
+          targetScenario = created.id;
+        }
         setQueue((current) =>
           current.map((entry) => (entry.id === item.id ? { ...entry, status: "done" } : entry)),
         );
@@ -109,8 +132,18 @@ export function UploadDialog({
 
   return (
     <Modal
-      title={`Add documents to ${game.title}`}
-      subtitle="The core rules are the primary source; supplements and campaigns are filed alongside."
+      title={
+        lockedScenario
+          ? `Add files to ${lockedScenario.title}`
+          : `Add documents to ${game.title}`
+      }
+      subtitle={
+        lockedScenario
+          ? `Maps, handouts and card decks attached to this scenario.${
+              lockedScenario.campaign_title ? ` Campaign: ${lockedScenario.campaign_title}.` : ""
+            }`
+          : "The core rules are the primary source; supplements and campaigns are filed alongside."
+      }
       onClose={() => {
         if (!busy) onClose();
       }}
@@ -134,38 +167,80 @@ export function UploadDialog({
         </>
       }
     >
-      <label className="field">
-        <span>File these under</span>
-        <select value={role} onChange={(event) => setRole(event.target.value)} disabled={busy}>
-          {roles.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.label}
-            </option>
-          ))}
-        </select>
-      </label>
+      {lockedScenario ? (
+        <div className="scenario-target">
+          <Icon name="book" size={16} />
+          <div>
+            <strong>{lockedScenario.title}</strong>
+            <span>
+              {lockedScenario.campaign_title ?? "Ungrouped campaign"} · extra files are filed
+              with this scenario
+            </span>
+          </div>
+        </div>
+      ) : (
+        <>
+          <label className="field">
+            <span>File these under</span>
+            <select value={role} onChange={(event) => setRole(event.target.value)} disabled={busy}>
+              {roles.map((entry) => (
+                <option key={entry.id} value={entry.id}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      {role === "campaign" && (
-        <label className="field">
-          <span>Campaign</span>
-          <select
-            value={campaignId}
-            onChange={(event) => setCampaignId(event.target.value)}
-            disabled={busy}
-          >
-            <option value="">Ungrouped campaign document</option>
-            {campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>
-                {campaign.title}
-              </option>
-            ))}
-          </select>
-          {campaigns.length === 0 && (
-            <small className="fine-print">
-              Create a campaign from the game view first to file this scenario.
-            </small>
+          {role === "campaign" && (
+            <label className="field">
+              <span>Campaign</span>
+              <select
+                value={campaignId}
+                onChange={(event) => {
+                  setCampaignId(event.target.value);
+                  setScenarioId("");
+                }}
+                disabled={busy}
+              >
+                <option value="">Ungrouped campaign document</option>
+                {campaigns.map((campaign) => (
+                  <option key={campaign.id} value={campaign.id}>
+                    {campaign.title}
+                  </option>
+                ))}
+              </select>
+              {campaigns.length === 0 && (
+                <small className="fine-print">
+                  Create a campaign from the game view first to file this scenario.
+                </small>
+              )}
+            </label>
           )}
-        </label>
+
+          {role === "campaign" && scenarioOptions.length > 0 && (
+            <label className="field">
+              <span>
+                Scenario <small>· optional</small>
+              </span>
+              <select
+                value={scenarioId}
+                onChange={(event) => setScenarioId(event.target.value)}
+                disabled={busy}
+              >
+                <option value="">New scenario</option>
+                {scenarioOptions.map((scenario) => (
+                  <option key={scenario.id} value={scenario.id}>
+                    {scenario.title}
+                    {scenario.file_count ? ` (${scenario.file_count + 1} files)` : ""}
+                  </option>
+                ))}
+              </select>
+              <small className="fine-print">
+                Pick a scenario to attach maps, handouts or cards to an existing scenario.
+              </small>
+            </label>
+          )}
+        </>
       )}
 
       <div
@@ -231,6 +306,18 @@ export function UploadDialog({
             </li>
           ))}
         </ul>
+      )}
+
+      {!lockedScenario && role === "campaign" && !scenarioId && pendingCount > 1 && (
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={groupFiles}
+            onChange={(event) => setGroupFiles(event.target.checked)}
+            disabled={busy}
+          />
+          File all {pendingCount} files under one new scenario
+        </label>
       )}
 
       <p className="fine-print">

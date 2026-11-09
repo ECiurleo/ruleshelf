@@ -321,6 +321,81 @@ def test_campaign_groups_and_stages(client, game):
     assert response.status_code == 400
 
 
+def test_scenario_holds_multiple_files(client, game):
+    campaign = client.post(
+        f"/api/games/{game['id']}/campaigns", json={"title": "The Enemy Within"}
+    ).json()
+
+    scenario = upload_document(
+        client,
+        game["id"],
+        role="campaign",
+        title="Power Behind the Throne",
+        campaign_id=campaign["id"],
+    )
+    maps = upload_document(
+        client,
+        game["id"],
+        role="campaign",
+        title="Endpaper Maps",
+        campaign_id=campaign["id"],
+        scenario_id=scenario["id"],
+    )
+    cards = upload_document(
+        client,
+        game["id"],
+        role="campaign",
+        title="Cards",
+        campaign_id=campaign["id"],
+        scenario_id=scenario["id"],
+    )
+    wait_until_ready(client, scenario["id"])
+    wait_until_ready(client, maps["id"])
+    ready_cards = wait_until_ready(client, cards["id"])
+
+    parent = client.get(f"/api/documents/{scenario['id']}").json()
+    assert parent["file_count"] == 2
+    assert parent["scenario_id"] is None
+    assert ready_cards["scenario_id"] == scenario["id"]
+    assert ready_cards["campaign_id"] == campaign["id"]
+    assert ready_cards["role"] == "campaign"
+    assert (maps["sort_order"], cards["sort_order"]) == (0, 1)
+
+    # A file belongs to its scenario: it cannot be re-filed on its own.
+    assert (
+        client.patch(f"/api/documents/{maps['id']}", json={"campaign_id": None}).status_code
+        == 400
+    )
+
+    # Only top-level campaign documents can hold files.
+    core = upload_document(client, game["id"], title="Core")
+    invalid = client.post(
+        "/api/documents",
+        data={"game_id": game["id"], "role": "campaign", "scenario_id": core["id"]},
+        files={"file": ("nested.txt", b"nested", "text/plain")},
+    )
+    assert invalid.status_code == 400
+    # ...and a file cannot hold files of its own.
+    nested = client.post(
+        "/api/documents",
+        data={"game_id": game["id"], "role": "campaign", "scenario_id": maps["id"]},
+        files={"file": ("nested.txt", b"nested", "text/plain")},
+    )
+    assert nested.status_code == 400
+
+    # Moving the scenario moves its files with it.
+    other = client.post(
+        f"/api/games/{game['id']}/campaigns", json={"title": "Other"}
+    ).json()
+    client.patch(f"/api/documents/{scenario['id']}", json={"campaign_id": other["id"]})
+    assert client.get(f"/api/documents/{maps['id']}").json()["campaign_id"] == other["id"]
+
+    # Deleting a scenario deletes its attached files.
+    assert client.delete(f"/api/documents/{scenario['id']}").json()["files_deleted"] == 2
+    assert client.get(f"/api/documents/{maps['id']}").status_code == 404
+    assert client.get(f"/api/documents/{cards['id']}").status_code == 404
+
+
 def test_campaigns_are_deleted_with_the_game(client, game):
     campaign = client.post(
         f"/api/games/{game['id']}/campaigns", json={"title": "Temp"}

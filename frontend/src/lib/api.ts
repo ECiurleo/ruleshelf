@@ -57,6 +57,9 @@ export interface Document {
   role: string;
   campaign_id: string | null;
   campaign_title: string | null;
+  scenario_id: string | null;
+  /** Number of extra files attached to this document when it is a scenario. */
+  file_count: number;
   sort_order: number;
   original_filename: string;
   content_type: string;
@@ -296,12 +299,14 @@ export const api = {
     file: File,
     title?: string,
     campaignId?: string | null,
+    scenarioId?: string | null,
   ) => {
     const form = new FormData();
     form.set("game_id", gameId);
     form.set("role", role);
     if (title) form.set("title", title);
     if (campaignId) form.set("campaign_id", campaignId);
+    if (scenarioId) form.set("scenario_id", scenarioId);
     form.set("file", file);
     return request<Document>("/api/documents", { method: "POST", body: form });
   },
@@ -311,11 +316,14 @@ export const api = {
       title?: string;
       role?: string;
       campaign_id?: string | null;
+      scenario_id?: string | null;
       sort_order?: number;
     },
   ) => patch<Document>(`/api/documents/${id}`, body),
   deleteDocument: (id: string) =>
-    request<{ deleted: boolean }>(`/api/documents/${id}`, { method: "DELETE" }),
+    request<{ deleted: boolean; files_deleted?: number }>(`/api/documents/${id}`, {
+      method: "DELETE",
+    }),
   reindexDocument: (id: string) =>
     request<{ status: string }>(`/api/documents/${id}/reindex`, { method: "POST" }),
   page: (id: string, page: number) =>
