@@ -555,6 +555,20 @@ def test_community_prompt_excludes_official_history():
     assert "Do not use earlier turns as sources" in prompt
 
 
+def test_bgg_queries_broaden_long_questions():
+    from app.services.bgg import _bgg_queries
+
+    queries = _bgg_queries(
+        "if i draw a Flood card during location setup do I automatically fail "
+        "its condition?",
+        "Earthborne Rangers",
+    )
+    assert len(queries) <= 14
+    assert queries[0].startswith("site:boardgamegeek.com/thread")
+    assert any('"flood card" setup' in query for query in queries)
+    assert any("Earthborne Rangers" in query for query in queries)
+
+
 def test_rewrite_prompt_requests_sequence_sections():
     from app.services.rag import REWRITE_SYSTEM
 

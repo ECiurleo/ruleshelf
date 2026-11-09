@@ -344,7 +344,12 @@ def ask(payload: AskRequest):
         if payload.include_bgg:
             yield _sse("community_search", {})
             if bgg_thread is not None:
-                bgg_thread.join()
+                bgg_thread.join(timeout=20)
+                if bgg_thread.is_alive():
+                    bgg_state["results"] = []
+                    bgg_state["note"] = (
+                        "BGG search timed out; the rulebook answer is unaffected."
+                    )
             bgg_results = bgg_state["results"]
             bgg_note = bgg_state["note"]
 
