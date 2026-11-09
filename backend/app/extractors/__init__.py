@@ -11,6 +11,7 @@ from app.extractors.base import ExtractedPage, ExtractionError, Extractor
 from app.extractors.registration import (
     ExtractorSpec,
     extract_file,
+    is_indexed,
     register_extractor,
     resolve_extension,
     supported_extensions,
@@ -22,6 +23,7 @@ __all__ = [
     "Extractor",
     "ExtractorSpec",
     "extract_file",
+    "is_indexed",
     "register_extractor",
     "resolve_extension",
     "supported_extensions",

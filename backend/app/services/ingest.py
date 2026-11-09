@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.config import CHUNK_OVERLAP, CHUNK_SIZE, FILES_DIR
 from app.db import db, utcnow
-from app.extractors import ExtractionError, extract_file
+from app.extractors import ExtractionError, extract_file, is_indexed
 from app.providers.base import ProviderError
 from app.services.chunking import prepare_pages, split_text
 from app.services.thumbnails import delete_thumbnail, ensure_thumbnail
@@ -70,6 +70,12 @@ def ingest_document(document_id: str) -> None:
     with db() as conn:
         doc = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
         if not doc:
+            return
+        if not is_indexed(doc["original_filename"]):
+            conn.execute(
+                "UPDATE documents SET status = 'unindexed', error = NULL WHERE id = ?",
+                (document_id,),
+            )
             return
         conn.execute(
             "UPDATE documents SET status = 'processing', error = NULL WHERE id = ?",

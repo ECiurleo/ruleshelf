@@ -409,6 +409,72 @@ def test_campaigns_are_deleted_with_the_game(client, game):
         assert conn.execute("SELECT COUNT(*) FROM campaigns").fetchone()[0] == 0
 
 
+def make_png() -> bytes:
+    """A small real PNG so PyMuPDF can read it back for the thumbnail."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=80, height=100)
+        page.draw_rect(page.rect, color=(0.2, 0.3, 0.4), fill=(0.82, 0.72, 0.55))
+        return page.get_pixmap().tobytes("png")
+    finally:
+        doc.close()
+
+
+def test_image_files_are_stored_but_not_indexed(client, game):
+    campaign = client.post(
+        f"/api/games/{game['id']}/campaigns", json={"title": "The Enemy Within"}
+    ).json()
+    scenario = upload_document(
+        client,
+        game["id"],
+        role="campaign",
+        title="Power Behind the Throne",
+        campaign_id=campaign["id"],
+    )
+    wait_until_ready(client, scenario["id"])
+
+    image = upload_document(
+        client,
+        game["id"],
+        role="campaign",
+        title="Endpaper map",
+        campaign_id=campaign["id"],
+        scenario_id=scenario["id"],
+        content=make_png(),
+        filename="endpaper-map.png",
+        content_type="image/png",
+    )
+    assert image["status"] == "unindexed"
+    assert image["indexed"] is False
+    assert image["chunk_count"] == 0
+    assert image["scenario_id"] == scenario["id"]
+    assert client.get(f"/api/documents/{scenario['id']}").json()["file_count"] == 1
+
+    # Stored-only files never reach the text index.
+    search = client.get(
+        "/api/search",
+        params={"q": "zzzznothing", "mode": "keyword", "game_id": game["id"]},
+    ).json()
+    assert search["count"] == 0
+    assert client.post(f"/api/documents/{image['id']}/reindex").status_code == 400
+
+    # The image itself becomes the thumbnail.
+    thumb = client.get(f"/api/documents/{image['id']}/thumbnail")
+    assert thumb.status_code == 200
+    assert thumb.content[:3] == b"\xff\xd8\xff"
+
+    # Image formats are advertised as stored-only.
+    formats = client.get("/api/formats").json()["formats"]
+    image_format = next(item for item in formats if "png" in item["extensions"])
+    assert image_format["indexed"] is False
+
+    # Deleting the scenario takes the stored image with it.
+    assert client.delete(f"/api/documents/{scenario['id']}").json()["files_deleted"] == 1
+    assert client.get(f"/api/documents/{image['id']}").status_code == 404
+
+
 def test_thumbnail_is_generated_and_removed(client, game):
     document = upload_document(client, game["id"])
     ready = wait_until_ready(client, document["id"])

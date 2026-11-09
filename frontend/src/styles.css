@@ -1753,6 +1753,12 @@ code {
   border-color: color-mix(in srgb, var(--danger) 30%, transparent);
 }
 
+.status-chip.unindexed {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 9%, transparent);
+  border-color: color-mix(in srgb, var(--muted) 26%, transparent);
+}
+
 .status-chip.pending,
 .status-chip.processing {
   color: var(--warn);

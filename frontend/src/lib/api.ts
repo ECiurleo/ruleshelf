@@ -38,7 +38,7 @@ export interface Game {
   chunk_count: number;
 }
 
-export type DocumentStatus = "pending" | "processing" | "ready" | "error";
+export type DocumentStatus = "pending" | "processing" | "ready" | "error" | "unindexed";
 
 export interface Campaign {
   id: string;
@@ -60,6 +60,8 @@ export interface Document {
   scenario_id: string | null;
   /** Number of extra files attached to this document when it is a scenario. */
   file_count: number;
+  /** False for stored-only files such as maps and handouts (no OCR/text index). */
+  indexed: boolean;
   sort_order: number;
   original_filename: string;
   content_type: string;
@@ -158,6 +160,8 @@ export interface FormatInfo {
   extensions: string[];
   label: string;
   description: string;
+  /** False for formats that are stored and previewed but not text-indexed. */
+  indexed: boolean;
 }
 
 export interface AppSettings {
@@ -220,14 +224,24 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (!response.ok) {
     let message = response.statusText || `Request failed (${response.status})`;
+    let parsed = false;
     try {
       const body = await response.json();
       message = body.detail ?? body.message ?? message;
       if (Array.isArray(message)) {
         message = message.map((item: { msg?: string }) => item.msg ?? String(item)).join("; ");
       }
+      parsed = true;
     } catch {
       /* not JSON */
+    }
+    if (response.status === 413 && !parsed) {
+      // The app always answers 413 with JSON, so a bare 413 comes from a
+      // proxy in front of it (Cloudflare caps requests at 100 MB).
+      message =
+        "Upload rejected as too large (413) before it reached Ruleshelf. " +
+        "Check the reverse proxy's body-size limit (Cloudflare: 100 MB) and " +
+        "RULESHELF_MAX_UPLOAD_MB, or upload directly on the local network.";
     }
     throw new ApiError(String(message), response.status);
   }
