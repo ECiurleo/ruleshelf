@@ -711,6 +711,50 @@ def test_manual_ocr_turns_a_stored_image_into_a_searchable_document(client, game
     assert client.post(f"/api/documents/{text['id']}/ocr").status_code == 400
 
 
+def test_queue_all_failed_documents_for_ocr(client, game, monkeypatch):
+    monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
+    monkeypatch.setattr(
+        "app.services.ingest.ocr_file",
+        lambda path, original_filename=None, language="eng": [
+            ExtractedPage(number=1, text="Recognised by the bulk OCR queue.")
+        ],
+    )
+    monkeypatch.setattr("app.api.documents.ocr_available", lambda: True)
+
+    with db() as conn:
+        set_setting(conn, "auto_ocr", "0")
+    try:
+        scan = make_blank_pdf()
+        first = upload_document(
+            client, game["id"], title="First scan", content=scan,
+            filename="first.pdf", content_type="application/pdf",
+        )
+        second = upload_document(
+            client, game["id"], title="Second scan", content=scan,
+            filename="second.pdf", content_type="application/pdf",
+        )
+        broken = upload_document(
+            client, game["id"], title="Empty text", content=b"   ",
+            filename="empty.txt", content_type="text/plain",
+        )
+        for document in (first, second, broken):
+            assert wait_until_ready(client, document["id"])["status"] == "error"
+
+        response = client.post(f"/api/documents/ocr-failed?game_id={game['id']}")
+        assert response.status_code == 200
+        # Only OCR-capable failures are queued; the empty text file is skipped.
+        assert response.json() == {"queued": 2}
+
+        for document in (first, second):
+            ready = wait_until_ready(client, document["id"])
+            assert ready["status"] == "ready"
+            assert ready["chunk_count"] >= 1
+        assert client.get(f"/api/documents/{broken['id']}").json()["status"] == "error"
+    finally:
+        with db() as conn:
+            set_setting(conn, "auto_ocr", "1")
+
+
 def test_thumbnail_is_generated_and_removed(client, game):
     document = upload_document(client, game["id"])
     ready = wait_until_ready(client, document["id"])

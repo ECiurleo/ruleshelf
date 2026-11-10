@@ -503,6 +503,34 @@ def ocr_document(document_id: str):
     return {"status": "pending"}
 
 
+@router.post("/ocr-failed", dependencies=[Depends(require_admin)])
+def ocr_failed_documents(game_id: str | None = None):
+    """Queue OCR for every failed, OCR-capable document (one game or all)."""
+    if not ocr_available():
+        raise HTTPException(
+            400, "OCR is not available in this build. Install Tesseract and restart."
+        )
+    with db() as conn:
+        params: list[str] = []
+        sql = "SELECT id, original_filename FROM documents WHERE status = 'error'"
+        if game_id:
+            sql += " AND game_id = ?"
+            params.append(game_id)
+        rows = conn.execute(sql, params).fetchall()
+        document_ids = [
+            row["id"] for row in rows if ocr_supported(row["original_filename"])
+        ]
+        for document_id in document_ids:
+            conn.execute(
+                "UPDATE documents SET status = 'pending', error = NULL, "
+                "ocr_requested = 1 WHERE id = ?",
+                (document_id,),
+            )
+    for document_id in document_ids:
+        submit_ingest(document_id)
+    return {"queued": len(document_ids)}
+
+
 @router.get("/{document_id}/thumbnail")
 def document_thumbnail(document_id: str):
     with db() as conn:

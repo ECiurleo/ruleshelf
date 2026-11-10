@@ -433,6 +433,11 @@ export const api = {
     request<{ status: string }>(`/api/documents/${id}/reindex`, { method: "POST" }),
   ocrDocument: (id: string) =>
     request<{ status: string }>(`/api/documents/${id}/ocr`, { method: "POST" }),
+  ocrFailedDocuments: (gameId?: string | null) =>
+    request<{ queued: number }>(
+      `/api/documents/ocr-failed${gameId ? `?game_id=${encodeURIComponent(gameId)}` : ""}`,
+      { method: "POST" },
+    ),
   page: (id: string, page: number) =>
     request<{
       document: { id: string; title: string; role: string };
