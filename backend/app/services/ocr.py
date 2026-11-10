@@ -37,6 +37,11 @@ OCR_EFFORT = {
     "medium": {"dpi": 300, "workers": 1, "pause": 0.0},
     "high": {"dpi": 300, "workers": 4, "pause": 0.0},
 }
+# Tesseract rejects extremely large images ("Overly large image"). Cap the
+# longest rendered side; 5000 px is plenty for text recognition and keeps
+# memory bounded even for A0 endpaper maps.
+MAX_OCR_SIDE = 5000
+
 OCR_EXTENSIONS = {
     ".pdf",
     ".png",
@@ -125,6 +130,15 @@ def _tesseract_image(image: str | Path, language: str, dpi: int) -> str:
     return result.stdout or ""
 
 
+def _scale_for(width: float, height: float, dpi: int) -> float:
+    """Render scale in points→pixels, capped so no side exceeds MAX_OCR_SIDE."""
+    scale = dpi / 72.0
+    longest = max(width, height, 1.0)
+    if longest * scale > MAX_OCR_SIDE:
+        scale = MAX_OCR_SIDE / longest
+    return scale
+
+
 def _ocr_pdf(
     path: str | Path, language: str, dpi: int, workers: int, pause: float
 ) -> list[ExtractedPage]:
@@ -140,8 +154,6 @@ def _ocr_pdf(
         count = doc.page_count
         if not count:
             return []
-        scale = dpi / 72.0
-        matrix = fitz.Matrix(scale, scale)
         texts: list[str] = []
         with tempfile.TemporaryDirectory(prefix="ruleshelf-ocr-") as temporary:
             directory = Path(temporary)
@@ -155,8 +167,12 @@ def _ocr_pdf(
                     ):
                         if pause:
                             time.sleep(pause)
-                        pixmap = doc[index].get_pixmap(
-                            matrix=matrix, alpha=False, colorspace=fitz.csRGB
+                        page = doc[index]
+                        scale = _scale_for(page.rect.width, page.rect.height, dpi)
+                        pixmap = page.get_pixmap(
+                            matrix=fitz.Matrix(scale, scale),
+                            alpha=False,
+                            colorspace=fitz.csRGB,
                         )
                         image = directory / f"page-{index + 1:04d}.png"
                         pixmap.save(str(image))
@@ -178,6 +194,30 @@ def _ocr_pdf(
         ExtractedPage(number=index + 1, text=text)
         for index, text in enumerate(texts)
     ]
+
+
+def _ocr_image(path: str | Path, language: str, dpi: int) -> list[ExtractedPage]:
+    """OCR an image, downscaling it first when Tesseract would reject its size."""
+    fitz = _fitz()
+    source = fitz.open(str(path))
+    try:
+        if not source.page_count:
+            raise ExtractionError("Image has no readable content.")
+        page = source[0]
+        longest = max(page.rect.width, page.rect.height)
+        scale = min(1.0, MAX_OCR_SIDE / longest) if longest else 1.0
+        if scale >= 0.999:
+            return [ExtractedPage(number=1, text=_tesseract_image(path, language, dpi))]
+        with tempfile.TemporaryDirectory(prefix="ruleshelf-ocr-") as temporary:
+            image = Path(temporary) / "page-0001.png"
+            pixmap = page.get_pixmap(
+                matrix=fitz.Matrix(scale, scale), alpha=False, colorspace=fitz.csRGB
+            )
+            pixmap.save(str(image))
+            text = _tesseract_image(image, language, dpi)
+        return [ExtractedPage(number=1, text=text)]
+    finally:
+        source.close()
 
 
 def ocr_file(
@@ -205,8 +245,7 @@ def ocr_file(
                     settings["workers"],
                     settings["pause"],
                 )
-            text = _tesseract_image(path, lang, settings["dpi"])
-            return [ExtractedPage(number=1, text=text)]
+            return _ocr_image(path, lang, settings["dpi"])
     except ExtractionError:
         raise
     except Exception as exc:  # noqa: BLE001 - rendering/subprocess raise many types
