@@ -38,7 +38,13 @@ export interface Game {
   chunk_count: number;
 }
 
-export type DocumentStatus = "pending" | "processing" | "ready" | "error" | "unindexed";
+export type DocumentStatus =
+  | "pending"
+  | "processing"
+  | "ocr"
+  | "ready"
+  | "error"
+  | "unindexed";
 
 export interface Campaign {
   id: string;
@@ -60,8 +66,13 @@ export interface Document {
   scenario_id: string | null;
   /** Number of extra files attached to this document when it is a scenario. */
   file_count: number;
-  /** False for stored-only files such as maps and handouts (no OCR/text index). */
+  /** True when the file has text in the index (including via OCR). */
   indexed: boolean;
+  /** True for image files, which are viewed as the original rather than in the reader. */
+  is_image: boolean;
+  /** True when this file type can be OCR'd and Tesseract is available. */
+  can_ocr: boolean;
+  ocr_requested: boolean;
   sort_order: number;
   original_filename: string;
   content_type: string;
@@ -182,6 +193,10 @@ export interface AppSettings {
     chat_model_active: string;
     provider_names: Record<string, string>;
     reddit_enabled: boolean;
+    auto_ocr: boolean;
+    ocr_language: string;
+    ocr_available: boolean;
+    ocr_languages: string[];
   };
 }
 
@@ -398,6 +413,8 @@ export const api = {
     }),
   reindexDocument: (id: string) =>
     request<{ status: string }>(`/api/documents/${id}/reindex`, { method: "POST" }),
+  ocrDocument: (id: string) =>
+    request<{ status: string }>(`/api/documents/${id}/ocr`, { method: "POST" }),
   page: (id: string, page: number) =>
     request<{
       document: { id: string; title: string; role: string };

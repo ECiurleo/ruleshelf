@@ -97,10 +97,5 @@ def extract_file(path: str | Path, original_filename: str | None = None) -> list
         resolve_extension(name)  # raises with a helpful message
         raise ExtractionError("Unsupported file type.")  # pragma: no cover
     pages = spec.func(str(path))
-    pages = [p for p in pages if p.text and p.text.strip()]
-    if not pages:
-        raise ExtractionError(
-            "No text could be extracted. If this is a scanned book, run OCR on it "
-            "first (for example with ocrmypdf) and upload the searchable PDF."
-        )
-    return pages
+    # No text is not an error here: ingestion may run OCR instead.
+    return [p for p in pages if p.text and p.text.strip()]

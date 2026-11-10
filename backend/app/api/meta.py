@@ -23,6 +23,7 @@ from app.providers.base import ProviderError
 from app.services.config_store import CONFIG_PATH, snapshot_config
 from app.services.embeddings import resolve_embedding
 from app.services.ingest import create_embed_job
+from app.services.ocr import normalise_language, ocr_available, ocr_languages
 from app.services.rag import system_prompt as effective_system_prompt
 
 router = APIRouter(prefix="/api", tags=["meta"])
@@ -36,6 +37,8 @@ EDITABLE_SETTINGS = {
     "rag_temperature",
     "system_prompt",
     "reddit_enabled",
+    "auto_ocr",
+    "ocr_language",
 }
 
 # Kept for older config snapshots that may still contain the removed fields.
@@ -85,6 +88,13 @@ class SettingsUpdate(BaseModel):
     rag_temperature: float | None = Field(default=None, ge=0, le=2)
     system_prompt: str | None = Field(default=None, max_length=8000)
     reddit_enabled: bool | None = None
+    auto_ocr: bool | None = None
+    ocr_language: str | None = Field(default=None, max_length=64)
+
+    @field_validator("ocr_language")
+    @classmethod
+    def ocr_language_code(cls, value: str) -> str:
+        return normalise_language(value)
 
 
 def _settings_payload(conn: sqlite3.Connection) -> dict:
@@ -140,6 +150,10 @@ def _settings_payload(conn: sqlite3.Connection) -> dict:
             "chat_model_active": chat_model,
             "provider_names": provider_names,
             "reddit_enabled": stored.get("reddit_enabled", "1") != "0",
+            "auto_ocr": stored.get("auto_ocr", "1") != "0",
+            "ocr_language": stored.get("ocr_language", "eng") or "eng",
+            "ocr_available": ocr_available(),
+            "ocr_languages": ocr_languages(),
         },
     }
 

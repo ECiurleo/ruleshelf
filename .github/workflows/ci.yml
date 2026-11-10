@@ -19,6 +19,8 @@ jobs:
           cache-dependency-path: backend/requirements-dev.txt
       - name: Install dependencies
         run: pip install -r backend/requirements-dev.txt
+      - name: Install OCR
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends tesseract-ocr
       - name: Lint
         run: ruff check app tests
         working-directory: backend

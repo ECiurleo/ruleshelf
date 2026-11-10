@@ -6,6 +6,7 @@ import { Icon } from "./Icon";
 const STATUS_LABEL: Record<Document["status"], string> = {
   pending: "Queued",
   processing: "Indexing…",
+  ocr: "Running OCR…",
   ready: "Ready",
   error: "Failed",
   unindexed: "Not indexed",
@@ -16,6 +17,7 @@ export function DocumentCoverCard({
   canWrite = true,
   onOpen,
   onReindex,
+  onOcr,
   onDelete,
   onEdit,
 }: {
@@ -23,11 +25,14 @@ export function DocumentCoverCard({
   canWrite?: boolean;
   onOpen: () => void;
   onReindex: () => void;
+  onOcr: () => void;
   onDelete: () => void;
   onEdit: () => void;
 }) {
   const [thumbFailed, setThumbFailed] = useState(false);
-  const busy = doc.status === "pending" || doc.status === "processing";
+  const busy = doc.status === "pending" ||
+    doc.status === "processing" ||
+    doc.status === "ocr";
   const failed = doc.status === "error";
 
   return (
@@ -77,15 +82,27 @@ export function DocumentCoverCard({
                 <button className="icon-button" onClick={onEdit} title="Edit document" aria-label="Edit document">
                   <Icon name="edit" size={15} />
                 </button>
-                <button
-                  className="icon-button"
-                  onClick={onReindex}
-                  disabled={busy || !doc.indexed}
-                  title={doc.indexed ? "Re-index" : "Stored only — no text to index"}
-                  aria-label="Re-index"
-                >
-                  <Icon name="refresh" size={15} />
-                </button>
+                {!doc.is_image && (
+                  <button
+                    className="icon-button"
+                    onClick={onReindex}
+                    disabled={busy}
+                    title="Re-index"
+                    aria-label="Re-index"
+                  >
+                    <Icon name="refresh" size={15} />
+                  </button>
+                )}
+                {doc.can_ocr && (
+                  <button
+                    className="icon-button"
+                    onClick={onOcr}
+                    title="Run OCR on this document"
+                    aria-label="Run OCR"
+                  >
+                    <Icon name="scan" size={15} />
+                  </button>
+                )}
                 <button
                   className="icon-button danger"
                   onClick={onDelete}

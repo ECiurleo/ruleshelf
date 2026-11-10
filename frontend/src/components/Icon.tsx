@@ -26,7 +26,8 @@ export type IconName =
   | "lock"
   | "logout"
   | "user"
-  | "image";
+  | "image"
+  | "scan";
 
 const paths: Record<IconName, React.ReactNode> = {
   search: (
@@ -46,6 +47,15 @@ const paths: Record<IconName, React.ReactNode> = {
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <circle cx="8.5" cy="9.5" r="1.5" />
       <path d="m21 15-5-5L5 20" />
+    </>
+  ),
+  scan: (
+    <>
+      <path d="M4 8V6a2 2 0 0 1 2-2h2" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v2" />
+      <path d="M20 16v2a2 2 0 0 1-2 2h-2" />
+      <path d="M8 20H6a2 2 0 0 1-2-2v-2" />
+      <path d="M7 12h10" />
     </>
   ),
   plus: <path d="M12 5v14M5 12h14" />,

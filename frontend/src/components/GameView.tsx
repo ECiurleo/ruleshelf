@@ -26,6 +26,7 @@ export function GameView({
   onCampaignDelete,
   onOpenDoc,
   onReindexDoc,
+  onOcrDoc,
   onDeleteDoc,
   onEditDoc,
 }: {
@@ -43,6 +44,7 @@ export function GameView({
   onCampaignDelete: (campaign: Campaign) => void;
   onOpenDoc: (doc: Document) => void;
   onReindexDoc: (doc: Document) => void;
+  onOcrDoc: (doc: Document) => void;
   onDeleteDoc: (doc: Document) => void;
   onEditDoc: (doc: Document) => void;
 }) {
@@ -82,7 +84,8 @@ export function GameView({
     ...extraRoles.map((role) => ({ id: role, label: role.replace(/_/g, " ") })),
   ];
   const processing = documents.filter(
-    (doc) => doc.status === "pending" || doc.status === "processing",
+    (doc) =>
+      doc.status === "pending" || doc.status === "processing" || doc.status === "ocr",
   ).length;
   const errataCount = documents.filter((doc) => doc.role === "errata").length;
 
@@ -108,6 +111,7 @@ export function GameView({
     canWrite,
     onOpen: () => onOpenDoc(doc),
     onReindex: () => onReindexDoc(doc),
+    onOcr: () => onOcrDoc(doc),
     onDelete: () => onDeleteDoc(doc),
     onEdit: () => onEditDoc(doc),
   });
@@ -250,6 +254,7 @@ export function GameView({
                           onDelete={group.campaign ? onCampaignDelete : undefined}
                           onOpenDoc={onOpenDoc}
                           onReindexDoc={onReindexDoc}
+                          onOcrDoc={onOcrDoc}
                           onDeleteDoc={onDeleteDoc}
                           onEditDoc={onEditDoc}
                         />
