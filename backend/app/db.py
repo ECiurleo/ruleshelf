@@ -159,6 +159,7 @@ DEFAULT_SETTINGS = {
     "rag_temperature": "0.1",
     "auto_ocr": "1",
     "ocr_language": "eng",
+    "ocr_cpu": "medium",
     "system_prompt": DEFAULT_SYSTEM_PROMPT,
 }
 

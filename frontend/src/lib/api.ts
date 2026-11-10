@@ -213,6 +213,7 @@ export interface AppSettings {
     reddit_enabled: boolean;
     auto_ocr: boolean;
     ocr_language: string;
+    ocr_cpu: string;
     ocr_available: boolean;
     ocr_languages: string[];
   };

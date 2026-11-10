@@ -253,6 +253,7 @@ function SearchTab({
   );
   const [autoOcr, setAutoOcr] = useState(bundle.info.auto_ocr);
   const [ocrLanguage, setOcrLanguage] = useState(bundle.info.ocr_language ?? "eng");
+  const [ocrCpu, setOcrCpu] = useState(bundle.info.ocr_cpu ?? "medium");
   const [chatModels, setChatModels] = useState<ModelInfo[]>([]);
   const [embedModels, setEmbedModels] = useState<ModelInfo[]>([]);
   const [busy, setBusy] = useState(false);
@@ -307,6 +308,7 @@ function SearchTab({
         reddit_enabled: redditEnabled,
         auto_ocr: autoOcr,
         ocr_language: ocrLanguage.trim() || "eng",
+        ocr_cpu: ocrCpu,
       });
       await onRefresh();
       notify("Settings saved.", "ok");
@@ -468,6 +470,22 @@ function SearchTab({
           </datalist>
           <small className="fine-print">
             Tesseract language codes. Join several with +, for example eng+deu.
+          </small>
+        </label>
+        <label className="field">
+          <span>OCR CPU usage</span>
+          <select
+            value={ocrCpu}
+            onChange={(event) => setOcrCpu(event.target.value)}
+            disabled={!bundle.info.ocr_available}
+          >
+            <option value="low">Low — 200 dpi, pauses between pages</option>
+            <option value="medium">Medium — 300 dpi, one page at a time</option>
+            <option value="high">High — 300 dpi, up to 4 pages in parallel</option>
+          </select>
+          <small className="fine-print">
+            One document is OCR'd at a time; High parallelises pages within it.
+            Lower settings take longer but leave the machine responsive.
           </small>
         </label>
       </section>

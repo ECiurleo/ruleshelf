@@ -40,7 +40,9 @@ def clean_library():
         conn.execute("DELETE FROM games")
         conn.execute("DELETE FROM jobs")
         # OCR switches are reset for every test; init_db re-seeds the defaults.
-        conn.execute("DELETE FROM settings WHERE key IN ('auto_ocr', 'ocr_language')")
+        conn.execute(
+            "DELETE FROM settings WHERE key IN ('auto_ocr', 'ocr_language', 'ocr_cpu')"
+        )
     for path in FILES_DIR.glob("*"):
         path.unlink(missing_ok=True)
     for path in THUMBNAILS_DIR.glob("*"):
