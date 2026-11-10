@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 import time
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -28,8 +29,11 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # Very small login throttle: 10 failures per key per 5 minutes.
 _ATTEMPTS: dict[str, list[float]] = {}
+_ATTEMPTS_LOCK = threading.Lock()
+_MAX_TRACKED_KEYS = 10_000
 _WINDOW = 300
 _LIMIT = 10
+_last_attempts_prune = 0.0
 
 
 class LoginRequest(BaseModel):
@@ -49,15 +53,31 @@ def _attempt_key(request: Request, email: str) -> str:
 
 
 def _check_throttle(key: str) -> None:
+    global _last_attempts_prune
     now = time.time()
-    attempts = [value for value in _ATTEMPTS.get(key, []) if now - value < _WINDOW]
-    _ATTEMPTS[key] = attempts
-    if len(attempts) >= _LIMIT:
-        raise HTTPException(429, "Too many login attempts. Try again in a few minutes.")
+    with _ATTEMPTS_LOCK:
+        if now - _last_attempts_prune >= 60:
+            for attempt_key, timestamps in list(_ATTEMPTS.items()):
+                active = [value for value in timestamps if now - value < _WINDOW]
+                if active:
+                    _ATTEMPTS[attempt_key] = active
+                else:
+                    del _ATTEMPTS[attempt_key]
+            _last_attempts_prune = now
+        attempts = _ATTEMPTS.get(key, [])
+        if len(attempts) >= _LIMIT:
+            raise HTTPException(429, "Too many login attempts. Try again in a few minutes.")
 
 
 def _record_failure(key: str) -> None:
-    _ATTEMPTS.setdefault(key, []).append(time.time())
+    with _ATTEMPTS_LOCK:
+        attempts = _ATTEMPTS.get(key)
+        if attempts is None:
+            if len(_ATTEMPTS) >= _MAX_TRACKED_KEYS:
+                oldest_key = min(_ATTEMPTS, key=lambda item: _ATTEMPTS[item][-1])
+                del _ATTEMPTS[oldest_key]
+            attempts = _ATTEMPTS.setdefault(key, [])
+        attempts.append(time.time())
 
 
 @router.post("/login")
@@ -71,7 +91,8 @@ def login(payload: LoginRequest, request: Request, response: Response):
             raise HTTPException(401, "Incorrect email or password.")
         token = create_session(conn, row["id"])
         user = public_user(row)
-    _ATTEMPTS.pop(key, None)
+    with _ATTEMPTS_LOCK:
+        _ATTEMPTS.pop(key, None)
     set_session_cookie(response, token, request)
     return {"user": user}
 

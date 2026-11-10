@@ -63,7 +63,7 @@ def _clear_chunks(conn: sqlite3.Connection, document_id: str) -> None:
 
 
 def recover_interrupted() -> None:
-    """Fail documents left mid-flight by a restart; no worker owns them now."""
+    """Fail documents and jobs left mid-flight by a restart."""
     with db() as conn:
         cursor = conn.execute(
             "UPDATE documents SET status = 'error', error = ? "
@@ -77,6 +77,13 @@ def recover_interrupted() -> None:
             log.warning(
                 "Marked %d interrupted document(s) as failed", cursor.rowcount
             )
+        jobs = conn.execute(
+            "UPDATE jobs SET status = 'error', message = ?, updated_at = ? "
+            "WHERE status IN ('queued', 'running')",
+            ("Interrupted by a server restart.", utcnow()),
+        )
+        if jobs.rowcount:
+            log.warning("Marked %d interrupted job(s) as failed", jobs.rowcount)
 
 
 def unindex_document(conn: sqlite3.Connection, document_id: str) -> None:
@@ -212,9 +219,6 @@ def ingest_document(document_id: str) -> None:
                 """,
                 (len(pages), len(rows), utcnow(), document_id),
             )
-            # Refresh the FTS index statistics for better query planning.
-            conn.execute("INSERT INTO chunks_fts(chunks_fts) VALUES('optimize')")
-
         log.info("Indexed %s (%d chunks)", doc["original_filename"], len(rows))
         _thumbnail_quietly(document_id)
     except Exception as exc:  # noqa: BLE001 - surfaced to the UI

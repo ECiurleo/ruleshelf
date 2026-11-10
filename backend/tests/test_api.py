@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import numpy as np
 import pytest
 
+from app.api import auth as auth_api
 from app.config import UPLOADS_DIR
 from app.db import db, get_setting, set_setting
 from app.extractors.base import ExtractedPage
-from app.providers.base import ModelInfo, Provider, ProviderConfig
+from app.providers.base import ModelInfo, Provider, ProviderConfig, ProviderError
 from app.services.ingest import recover_interrupted
 from app.services.ocr import ocr_available
 from app.services.search import SearchFilters, search_semantic
@@ -161,6 +164,19 @@ def test_semantic_search_ranks_nearest_neighbour(client, game):
             "INSERT INTO embeddings (chunk_id, model, dim, vector) VALUES (?, 'test-model', 3, ?)",
             (other["id"], np.asarray([0.0, 1.0, 0.0], dtype=np.float32).tobytes()),
         )
+        filler_vector = np.asarray([0.0, 1.0, 0.0], dtype=np.float32).tobytes()
+        for ordinal in range(511):
+            filler = conn.execute(
+                "INSERT INTO chunks "
+                "(document_id, game_id, role, page_start, page_end, ordinal, text) "
+                "VALUES (?, ?, 'core', 1, 1, ?, 'Filler chunk for batching')",
+                (document["id"], game["id"], ordinal + 10),
+            )
+            conn.execute(
+                "INSERT INTO embeddings (chunk_id, model, dim, vector) "
+                "VALUES (?, 'test-model', 3, ?)",
+                (filler.lastrowid, filler_vector),
+            )
 
     class FakeEmbedder(Provider):
         supports_embeddings = True
@@ -181,6 +197,22 @@ def test_semantic_search_ranks_nearest_neighbour(client, game):
             limit=5,
         )
     assert results[0]["chunk_id"] == chunk["id"]
+
+    with db() as conn:
+        conn.execute(
+            "UPDATE embeddings SET dim = 2, vector = ? "
+            "WHERE chunk_id = ? AND model = 'test-model'",
+            (np.asarray([1.0, 0.0], dtype=np.float32).tobytes(), other["id"]),
+        )
+        with pytest.raises(ProviderError, match="different model dimension"):
+            search_semantic(
+                conn,
+                FakeEmbedder(ProviderConfig(id="fake", name="Fake", kind="fake", base_url="")),
+                "test-model",
+                "charge",
+                SearchFilters(game_id=game["id"]),
+                limit=5,
+            )
 
 
 def test_game_delete_cascades(client, game):
@@ -245,12 +277,14 @@ def test_ask_requires_provider(client, game):
 
 def test_config_snapshot_is_written_and_restored(client):
     import json
+    import os
     import stat
 
     from app.services.config_store import CONFIG_PATH, apply_config_file
 
     assert CONFIG_PATH.exists()
-    assert stat.S_IMODE(CONFIG_PATH.stat().st_mode) == 0o600
+    if os.name == "posix":
+        assert stat.S_IMODE(CONFIG_PATH.stat().st_mode) == 0o600
     snapshot = json.loads(CONFIG_PATH.read_text())
     assert "settings" in snapshot
     assert "providers" in snapshot
@@ -360,6 +394,13 @@ def test_scenario_holds_multiple_files(client, game):
 
     parent = client.get(f"/api/documents/{scenario['id']}").json()
     assert parent["file_count"] == 2
+    listed_parent = next(
+        item
+        for item in client.get(f"/api/documents?game_id={game['id']}").json()["documents"]
+        if item["id"] == scenario["id"]
+    )
+    assert listed_parent["file_count"] == 2
+    assert listed_parent["embedded_chunks"] == 0
     assert parent["scenario_id"] is None
     assert ready_cards["scenario_id"] == scenario["id"]
     assert ready_cards["campaign_id"] == campaign["id"]
@@ -561,6 +602,23 @@ def test_chunked_upload_checks_offsets_and_size(client, game):
         client.put(f"/api/documents/uploads/{upload_id}?offset=0", content=b"x").status_code
         == 404
     )
+
+
+def test_chunked_upload_serializes_overlapping_chunks(client, game):
+    init = client.post(
+        "/api/documents/uploads",
+        json={"game_id": game["id"], "role": "core", "filename": "book.txt", "size": 1},
+    )
+    assert init.status_code == 201, init.text
+    upload_id = init.json()["upload_id"]
+
+    def send_chunk(_):
+        return client.put(f"/api/documents/uploads/{upload_id}?offset=0", content=b"x")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(send_chunk, range(2)))
+    assert sorted(response.status_code for response in responses) == [200, 409]
+    assert client.delete(f"/api/documents/uploads/{upload_id}").status_code == 200
 
 
 def make_blank_pdf() -> bytes:
@@ -793,10 +851,45 @@ def test_interrupted_documents_are_recovered_on_startup(client, game):
         conn.execute(
             "UPDATE documents SET status = 'ocr' WHERE id = ?", (document["id"],)
         )
+        conn.execute(
+            "INSERT INTO jobs (id, kind, status, progress, message, created_at, updated_at) "
+            "VALUES ('queued-job', 'embed', 'queued', 0, 'Queued', 'now', 'now')"
+        )
+        conn.execute(
+            "INSERT INTO jobs (id, kind, status, progress, message, created_at, updated_at) "
+            "VALUES ('running-job', 'embed', 'running', 0.5, 'Running', 'now', 'now')"
+        )
     recover_interrupted()
     recovered = client.get(f"/api/documents/{document['id']}").json()
     assert recovered["status"] == "error"
     assert "restart" in (recovered["error"] or "").lower()
+    with db() as conn:
+        jobs = conn.execute(
+            "SELECT id, status, message FROM jobs ORDER BY id"
+        ).fetchall()
+    assert [(job["id"], job["status"]) for job in jobs] == [
+        ("queued-job", "error"),
+        ("running-job", "error"),
+    ]
+    assert all("restart" in job["message"].lower() for job in jobs)
+
+
+def test_login_throttle_expires_and_caps_tracked_keys(monkeypatch):
+    auth_api._ATTEMPTS.clear()
+    monkeypatch.setattr(auth_api, "_MAX_TRACKED_KEYS", 2)
+    monkeypatch.setattr(auth_api, "_last_attempts_prune", 0.0)
+    monkeypatch.setattr(auth_api.time, "time", lambda: 1_000.0)
+    auth_api._ATTEMPTS["expired"] = [0.0]
+    try:
+        auth_api._check_throttle("first")
+        assert "expired" not in auth_api._ATTEMPTS
+        auth_api._record_failure("first")
+        auth_api._record_failure("second")
+        auth_api._record_failure("third")
+        assert len(auth_api._ATTEMPTS) <= 2
+        assert "third" in auth_api._ATTEMPTS
+    finally:
+        auth_api._ATTEMPTS.clear()
 
 
 def test_thumbnail_is_generated_and_removed(client, game):

@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
+import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
@@ -60,6 +63,25 @@ def _roles_for(conn, game_id: str) -> list[dict]:
 
 UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024
 _UPLOAD_ID = re.compile(r"^[0-9a-f]{32}$")
+_upload_locks: dict[str, tuple[asyncio.Lock, int]] = {}
+_upload_locks_guard = threading.Lock()
+
+
+@asynccontextmanager
+async def _serialized_upload(upload_id: str):
+    with _upload_locks_guard:
+        lock, users = _upload_locks.get(upload_id, (asyncio.Lock(), 0))
+        _upload_locks[upload_id] = (lock, users + 1)
+    try:
+        async with lock:
+            yield
+    finally:
+        with _upload_locks_guard:
+            lock, users = _upload_locks[upload_id]
+            if users == 1:
+                del _upload_locks[upload_id]
+            else:
+                _upload_locks[upload_id] = (lock, users - 1)
 
 
 @dataclass(slots=True)
@@ -207,21 +229,30 @@ def _sweep_uploads() -> None:
         pass
 
 
-def _doc_payload(conn, row, embedding_model: str) -> dict:
-    embedded = 0
-    if embedding_model:
-        embedded = conn.execute(
-            "SELECT COUNT(*) AS n FROM embeddings e JOIN chunks c ON c.id = e.chunk_id "
-            "WHERE c.document_id = ? AND e.model = ?",
-            (row["id"], embedding_model),
-        ).fetchone()["n"]
+def _doc_payload(
+    conn,
+    row,
+    embedding_model: str,
+    *,
+    embedded: int | None = None,
+    file_count: int | None = None,
+) -> dict:
+    if embedded is None:
+        embedded = 0
+        if embedding_model:
+            embedded = conn.execute(
+                "SELECT COUNT(*) AS n FROM embeddings e JOIN chunks c ON c.id = e.chunk_id "
+                "WHERE c.document_id = ? AND e.model = ?",
+                (row["id"], embedding_model),
+            ).fetchone()["n"]
     try:
         campaign_title = row["campaign_title"]
     except (IndexError, KeyError):
         campaign_title = None
-    file_count = conn.execute(
-        "SELECT COUNT(*) AS n FROM documents WHERE scenario_id = ?", (row["id"],)
-    ).fetchone()["n"]
+    if file_count is None:
+        file_count = conn.execute(
+            "SELECT COUNT(*) AS n FROM documents WHERE scenario_id = ?", (row["id"],)
+        ).fetchone()["n"]
     return {
         "id": row["id"],
         "game_id": row["game_id"],
@@ -258,9 +289,14 @@ def list_documents(game_id: str | None = None, role: str | None = None):
         embedding_model = get_setting(conn, "embedding_model")
         params: list = []
         sql = (
-            "SELECT d.*, c.title AS campaign_title FROM documents d "
+            "SELECT d.*, c.title AS campaign_title, "
+            "(SELECT COUNT(*) FROM embeddings e JOIN chunks ch ON ch.id = e.chunk_id "
+            "WHERE ch.document_id = d.id AND e.model = ?) AS embedded_chunks, "
+            "(SELECT COUNT(*) FROM documents child WHERE child.scenario_id = d.id) "
+            "AS attached_file_count FROM documents d "
             "LEFT JOIN campaigns c ON c.id = d.campaign_id"
         )
+        params.append(embedding_model)
         clauses = []
         if game_id:
             clauses.append("d.game_id = ?")
@@ -271,7 +307,16 @@ def list_documents(game_id: str | None = None, role: str | None = None):
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
         rows = conn.execute(sql, params).fetchall()
-        docs = [_doc_payload(conn, row, embedding_model) for row in rows]
+        docs = [
+            _doc_payload(
+                conn,
+                row,
+                embedding_model,
+                embedded=row["embedded_chunks"],
+                file_count=row["attached_file_count"],
+            )
+            for row in rows
+        ]
 
         order: list[str] = []
         order_index: dict[str, int] = {}
@@ -396,30 +441,31 @@ async def upload_chunk(
     upload_id: str, request: Request, offset: int = Query(default=0, ge=0)
 ):
     """Append one chunk of a chunked upload at the given byte offset."""
-    meta = _read_upload(upload_id)
-    part = _upload_part_path(upload_id)
-    current = part.stat().st_size if part.exists() else 0
-    if offset != current:
-        raise HTTPException(409, f"Chunk out of order: expected offset {current}.")
-    declared = int(meta["size"])
-    received = 0
-    limit_message = (
-        f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit."
-    )
-    try:
-        with part.open("ab") as handle:
-            async for chunk in request.stream():
-                received += len(chunk)
-                if current + received > declared:
-                    raise HTTPException(400, "Upload is larger than the declared size.")
-                if current + received > MAX_UPLOAD_BYTES:
-                    raise HTTPException(413, limit_message)
-                handle.write(chunk)
-    except HTTPException:
-        with part.open("r+b") as handle:
-            handle.truncate(current)
-        raise
-    return {"received": current + received, "size": declared}
+    async with _serialized_upload(upload_id):
+        meta = _read_upload(upload_id)
+        part = _upload_part_path(upload_id)
+        current = part.stat().st_size if part.exists() else 0
+        if offset != current:
+            raise HTTPException(409, f"Chunk out of order: expected offset {current}.")
+        declared = int(meta["size"])
+        received = 0
+        limit_message = (
+            f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)} MB upload limit."
+        )
+        try:
+            with part.open("ab") as handle:
+                async for chunk in request.stream():
+                    received += len(chunk)
+                    if current + received > declared:
+                        raise HTTPException(400, "Upload is larger than the declared size.")
+                    if current + received > MAX_UPLOAD_BYTES:
+                        raise HTTPException(413, limit_message)
+                    handle.write(chunk)
+        except HTTPException:
+            with part.open("r+b") as handle:
+                handle.truncate(current)
+            raise
+        return {"received": current + received, "size": declared}
 
 
 @router.post(
@@ -427,58 +473,60 @@ async def upload_chunk(
     status_code=201,
     dependencies=[Depends(require_admin)],
 )
-def complete_upload(upload_id: str):
-    meta = _read_upload(upload_id)
-    part = _upload_part_path(upload_id)
-    actual = part.stat().st_size if part.exists() else 0
-    declared = int(meta["size"])
-    if actual != declared:
-        raise HTTPException(
-            400, f"Upload incomplete: {actual} of {declared} bytes received."
-        )
-
-    filename = meta["filename"]
-    indexed = bool(meta["indexed"])
-    with db() as conn:
-        # Re-validate: the campaign or scenario may have moved during the upload.
-        target = _resolve_target(
-            conn, meta["game_id"], meta["role"], meta["campaign_id"], meta["scenario_id"]
-        )
-
-    document_id = uuid.uuid4().hex
-    stored_name = f"{document_id}.{meta['ext']}"
-    destination = FILES_DIR / stored_name
-    os.replace(part, destination)
-
-    default_title = Path(filename).stem
-    title = (meta["title"] or default_title).strip()[:200] or default_title
-    try:
-        with db() as conn:
-            payload = _insert_document(
-                conn,
-                document_id=document_id,
-                target=target,
-                title=title,
-                filename=filename,
-                stored_name=stored_name,
-                content_type=meta["content_type"],
-                size=actual,
-                indexed=indexed,
+async def complete_upload(upload_id: str):
+    async with _serialized_upload(upload_id):
+        meta = _read_upload(upload_id)
+        part = _upload_part_path(upload_id)
+        actual = part.stat().st_size if part.exists() else 0
+        declared = int(meta["size"])
+        if actual != declared:
+            raise HTTPException(
+                400, f"Upload incomplete: {actual} of {declared} bytes received."
             )
-    except Exception:
-        destination.unlink(missing_ok=True)
-        raise
-    _clear_upload(upload_id)
-    if indexed:
-        submit_ingest(document_id)
-    return payload
+
+        filename = meta["filename"]
+        indexed = bool(meta["indexed"])
+        with db() as conn:
+            # Re-validate: the campaign or scenario may have moved during the upload.
+            target = _resolve_target(
+                conn, meta["game_id"], meta["role"], meta["campaign_id"], meta["scenario_id"]
+            )
+
+        document_id = uuid.uuid4().hex
+        stored_name = f"{document_id}.{meta['ext']}"
+        destination = FILES_DIR / stored_name
+        os.replace(part, destination)
+
+        default_title = Path(filename).stem
+        title = (meta["title"] or default_title).strip()[:200] or default_title
+        try:
+            with db() as conn:
+                payload = _insert_document(
+                    conn,
+                    document_id=document_id,
+                    target=target,
+                    title=title,
+                    filename=filename,
+                    stored_name=stored_name,
+                    content_type=meta["content_type"],
+                    size=actual,
+                    indexed=indexed,
+                )
+        except Exception:
+            destination.unlink(missing_ok=True)
+            raise
+        _clear_upload(upload_id)
+        if indexed:
+            submit_ingest(document_id)
+        return payload
 
 
 @router.delete("/uploads/{upload_id}", dependencies=[Depends(require_admin)])
-def cancel_upload(upload_id: str):
-    _read_upload(upload_id)
-    _clear_upload(upload_id)
-    return {"deleted": True}
+async def cancel_upload(upload_id: str):
+    async with _serialized_upload(upload_id):
+        _read_upload(upload_id)
+        _clear_upload(upload_id)
+        return {"deleted": True}
 
 
 @router.post("/{document_id}/ocr", dependencies=[Depends(require_admin)])

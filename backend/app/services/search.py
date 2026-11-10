@@ -259,37 +259,64 @@ def search_semantic(
         WHERE e.model = ?
           {'AND ' + ' AND '.join(clauses) if clauses else ''}
     """
-    rows = conn.execute(sql, [model, *params]).fetchall()
+    cursor = conn.execute(sql, [model, *params])
+    batch_size = 512
+    rows = cursor.fetchmany(batch_size)
     if not rows:
         return []
 
-    query_vector = np.asarray(provider.embed([query], model)[0], dtype=np.float32)
+    vectors = provider.embed([query], model)
+    if len(vectors) != 1:
+        raise ProviderError(
+            f"{provider.config.name} returned {len(vectors)} vectors for one query."
+        )
+    query_vector = np.asarray(vectors[0], dtype=np.float32)
+    if query_vector.ndim != 1:
+        raise ProviderError("The embedding provider returned an invalid query vector.")
     query_norm = float(np.linalg.norm(query_vector)) or 1.0
 
-    matrix = np.vstack([blob_to_vector(row["vector"]) for row in rows])
-    if matrix.shape[1] != query_vector.shape[0]:
-        raise ProviderError(
-            "The stored embeddings were made with a different model dimension. "
-            "Re-embed the library in Settings.",
-            409,
-        )
-    norms = np.linalg.norm(matrix, axis=1)
-    norms[norms == 0] = 1.0
-    scores = (matrix @ query_vector) / (norms * query_norm)
+    candidate_count = max(limit * 2, limit)
+    top_rows: list[sqlite3.Row] = []
+    top_scores = np.empty(0, dtype=np.float32)
+    while rows:
+        matrix_rows = [blob_to_vector(row["vector"]) for row in rows]
+        if any(
+            row["dim"] != query_vector.shape[0] or vector.size != query_vector.shape[0]
+            for row, vector in zip(rows, matrix_rows, strict=True)
+        ):
+            raise ProviderError(
+                "The stored embeddings were made with a different model dimension. "
+                "Re-embed the library in Settings.",
+                409,
+            )
 
-    order = np.argsort(scores)[::-1][: max(limit * 2, limit)]
+        matrix = np.vstack(matrix_rows)
+        norms = np.linalg.norm(matrix, axis=1)
+        norms[norms == 0] = 1.0
+        scores = (matrix @ query_vector) / (norms * query_norm)
+
+        combined_rows = top_rows + rows
+        combined_scores = np.concatenate((top_scores, scores))
+        keep = min(candidate_count, len(combined_scores))
+        selected = np.argsort(combined_scores)[-keep:][::-1]
+        top_rows = [combined_rows[index] for index in selected]
+        top_scores = combined_scores[selected]
+        rows = cursor.fetchmany(batch_size)
+
     # Embedding scores are anisotropic: unrelated text still sits around 0.4.
     # Keep the neighbourhood of the best hit instead of returning the whole book.
-    if len(order):
-        cutoff = float(scores[order[0]]) - 0.15
-        order = [index for index in order if scores[index] >= cutoff]
+    if len(top_scores):
+        cutoff = float(top_scores[0]) - 0.15
+        keep = top_scores >= cutoff
+        top_rows = [row for row, selected in zip(top_rows, keep, strict=True) if selected]
+        top_scores = top_scores[keep]
 
     ranked: list[dict] = []
-    for index in order:
+    for row, score in zip(top_rows, top_scores, strict=True):
         result = _row_to_result(
-            rows[index],
-            _highlight_window(rows[index]["text"], query),
-            float(scores[index]),
+            row,
+            _highlight_window(row["text"], query),
+            float(score),
             roles,
         )
         result["score"] *= _precedence_multiplier(result["document"]["precedence"])
