@@ -62,6 +62,23 @@ def _clear_chunks(conn: sqlite3.Connection, document_id: str) -> None:
     conn.execute("DELETE FROM chunks WHERE document_id = ?", (document_id,))
 
 
+def recover_interrupted() -> None:
+    """Fail documents left mid-flight by a restart; no worker owns them now."""
+    with db() as conn:
+        cursor = conn.execute(
+            "UPDATE documents SET status = 'error', error = ? "
+            "WHERE status IN ('pending', 'processing', 'ocr')",
+            (
+                "Interrupted by a server restart. Re-index the document, or use "
+                "Run OCR if it is a scan.",
+            ),
+        )
+        if cursor.rowcount:
+            log.warning(
+                "Marked %d interrupted document(s) as failed", cursor.rowcount
+            )
+
+
 def unindex_document(conn: sqlite3.Connection, document_id: str) -> None:
     _clear_chunks(conn, document_id)
     delete_thumbnail(document_id)
@@ -99,19 +116,27 @@ def ingest_document(document_id: str) -> None:
 
         should_ocr = ocr_available() and (wants_ocr or (not pages and auto_ocr))
         if should_ocr:
-            with db() as conn:
-                conn.execute(
-                    "UPDATE documents SET status = 'ocr', error = NULL WHERE id = ?",
-                    (document_id,),
+            def mark_ocr_started() -> None:
+                with db() as conn:
+                    conn.execute(
+                        "UPDATE documents SET status = 'ocr', error = NULL WHERE id = ?",
+                        (document_id,),
+                    )
+                log.info(
+                    "Running OCR on %s (%s, %s CPU)",
+                    doc["original_filename"],
+                    language,
+                    effort,
                 )
-            log.info(
-                "Running OCR on %s (%s, %s CPU)",
-                doc["original_filename"],
-                language,
-                effort,
-            )
+
             pages = prepare_pages(
-                ocr_file(path, doc["original_filename"], language, effort)
+                ocr_file(
+                    path,
+                    doc["original_filename"],
+                    language,
+                    effort,
+                    on_start=mark_ocr_started,
+                )
             )
 
         if not pages:

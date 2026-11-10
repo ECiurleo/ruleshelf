@@ -22,6 +22,7 @@ import subprocess
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from pathlib import Path
@@ -225,8 +226,13 @@ def ocr_file(
     original_filename: str | None = None,
     language: str = DEFAULT_LANGUAGE,
     effort: str = "medium",
+    on_start: Callable[[], None] | None = None,
 ) -> list[ExtractedPage]:
-    """Return OCR text for a PDF or image, one ExtractedPage per page."""
+    """Return OCR text for a PDF or image, one ExtractedPage per page.
+
+    ``on_start`` runs once the server-wide OCR lock has been acquired, so the
+    caller can mark the document as actually running rather than queued.
+    """
     if not ocr_available():
         raise ExtractionError(
             "OCR is not available in this build. Install Tesseract and restart."
@@ -237,6 +243,8 @@ def ocr_file(
     settings = OCR_EFFORT[normalise_effort(effort)]
     try:
         with _OCR_LOCK:
+            if on_start is not None:
+                on_start()
             if suffix == ".pdf":
                 return _ocr_pdf(
                     path,

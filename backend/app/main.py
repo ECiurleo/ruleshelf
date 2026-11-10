@@ -18,7 +18,7 @@ from app.db import db, init_db
 from app.extractors import ExtractionError
 from app.providers.base import ProviderError
 from app.services.config_store import CONFIG_PATH, apply_config_file, snapshot_config
-from app.services.ingest import shutdown
+from app.services.ingest import recover_interrupted, shutdown
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -31,6 +31,7 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    recover_interrupted()
     applied = apply_config_file()
     if not applied and not CONFIG_PATH.exists():
         # First run (or a fresh data folder): write the initial snapshot.
