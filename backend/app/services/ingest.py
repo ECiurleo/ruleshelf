@@ -116,14 +116,19 @@ def ingest_document(document_id: str) -> None:
                         (document_id,),
                     )
                 return
+            if should_ocr:
+                raise ExtractionError(
+                    "No text could be extracted, even with OCR. Check the scan quality and "
+                    "the OCR language, or upload a searchable copy."
+                )
             if not ocr_available():
                 raise ExtractionError(
                     "No text could be extracted, and OCR is not available in this build. "
                     "Install Tesseract or upload an OCR'd copy."
                 )
             raise ExtractionError(
-                "No text could be extracted, even with OCR. Check the scan quality and "
-                "the OCR language, or upload a searchable copy."
+                "No text could be extracted. This looks like a scanned document; "
+                "use Run OCR to recognise it."
             )
 
         rows: list[tuple] = []

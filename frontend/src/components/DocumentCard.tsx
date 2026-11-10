@@ -1,16 +1,7 @@
 import { useState } from "react";
 import type { Document } from "../lib/api";
-import { formatBytes, formatDate, plural } from "../lib/api";
+import { documentStatusLabel, formatBytes, formatDate, plural } from "../lib/api";
 import { Icon } from "./Icon";
-
-const STATUS_LABEL: Record<Document["status"], string> = {
-  pending: "Queued",
-  processing: "Indexing…",
-  ocr: "Running OCR…",
-  ready: "Ready",
-  error: "Failed",
-  unindexed: "Not indexed",
-};
 
 export function DocumentCard({
   document: doc,
@@ -58,7 +49,7 @@ export function DocumentCard({
           </button>
           <span className={`status-chip ${doc.status}`}>
             {busy && <span className="spinner" />}
-            {STATUS_LABEL[doc.status]}
+            {documentStatusLabel(doc)}
           </span>
         </div>
         <div className="doc-meta">
@@ -124,7 +115,14 @@ export function DocumentCard({
               <button
                 className="icon-button"
                 onClick={onOcr}
-                title="Run OCR on this document"
+                disabled={busy}
+                title={
+                  doc.status === "ocr"
+                    ? "OCR running"
+                    : doc.ocr_requested
+                      ? "OCR queued"
+                      : "Run OCR on this document"
+                }
                 aria-label="Run OCR"
               >
                 <Icon name="scan" size={17} />

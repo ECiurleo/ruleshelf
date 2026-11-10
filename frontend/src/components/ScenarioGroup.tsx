@@ -1,17 +1,8 @@
 import type { Document } from "../lib/api";
-import { formatBytes, plural } from "../lib/api";
+import { documentStatusLabel, formatBytes, plural } from "../lib/api";
 import { DocumentCard } from "./DocumentCard";
 import { DocumentCoverCard } from "./DocumentCoverCard";
 import { Icon } from "./Icon";
-
-const STATUS_LABEL: Record<Document["status"], string> = {
-  pending: "Queued",
-  processing: "Indexing…",
-  ocr: "Running OCR…",
-  ready: "Ready",
-  error: "Failed",
-  unindexed: "Not indexed",
-};
 
 /**
  * One scenario inside a campaign: a lead document plus any extra files
@@ -99,7 +90,7 @@ export function ScenarioGroup({
                 {file.status !== "ready" && (
                   <span className={`status-chip ${file.status}`}>
                     {busy && <span className="spinner" />}
-                    {STATUS_LABEL[file.status]}
+                    {documentStatusLabel(file)}
                   </span>
                 )}
                 <div className="scenario-file-actions">
@@ -127,7 +118,14 @@ export function ScenarioGroup({
                         <button
                           className="icon-button small"
                           onClick={() => onOcrDoc(file)}
-                          title="Run OCR on this file"
+                          disabled={busy}
+                          title={
+                            file.status === "ocr"
+                              ? "OCR running"
+                              : file.ocr_requested
+                                ? "OCR queued"
+                                : "Run OCR on this file"
+                          }
                           aria-label="Run OCR"
                         >
                           <Icon name="scan" size={15} />

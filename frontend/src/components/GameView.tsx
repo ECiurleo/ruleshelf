@@ -87,6 +87,11 @@ export function GameView({
     (doc) =>
       doc.status === "pending" || doc.status === "processing" || doc.status === "ocr",
   ).length;
+  const ocrActive = documents.filter(
+    (doc) =>
+      doc.ocr_requested &&
+      (doc.status === "pending" || doc.status === "processing" || doc.status === "ocr"),
+  ).length;
   const errataCount = documents.filter((doc) => doc.role === "errata").length;
 
   const campaignDocs = documents.filter((doc) => doc.role === "campaign");
@@ -140,6 +145,7 @@ export function GameView({
                 <span className="dot-sep" />
                 <span className="text-warn">
                   <span className="spinner" /> {processing} indexing
+                  {ocrActive > 0 ? ` · ${ocrActive} OCR` : ""}
                 </span>
               </>
             )}
