@@ -9,6 +9,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter
+from dataclasses import dataclass
 
 from app.extractors import ExtractedPage
 
@@ -16,6 +17,17 @@ _DEHYPHENATE = re.compile(r"(\w)-\s*\n\s*(\w)")
 _BLANK_RUN = re.compile(r"\n{3,}")
 _SPACES = re.compile(r"[ \t\u00a0]+")
 _SENTENCE_BOUNDARY = re.compile(r"(?<=[.!?;:])\s+|\n{2,}")
+_HEADING = re.compile(r"^(#{1,6})\s+(\S.*?)\s*#*$")
+_PAGE_NUMBER = re.compile(r"(?:page\s*)?(\d{1,4})", re.IGNORECASE)
+MAX_SECTION_CHARS = 200
+
+
+@dataclass(slots=True)
+class Chunk:
+    page: int | None
+    printed: str
+    section: str
+    text: str
 
 
 def _normalise(page: str) -> str:
@@ -58,17 +70,32 @@ def strip_running_headers(pages: list[ExtractedPage]) -> list[ExtractedPage]:
     cleaned: list[ExtractedPage] = []
     for page in pages:
         lines = page.text.splitlines()
+        printed = page.printed
+        removed: list[str] = []
         while lines and _signature(lines[0]) in top_repeated:
-            lines.pop(0)
+            removed.append(lines.pop(0))
         while lines and _signature(lines[-1]) in bottom_repeated:
-            lines.pop()
-        cleaned.append(ExtractedPage(number=page.number, text="\n".join(lines), label=page.label))
+            removed.append(lines.pop())
+        if not printed:
+            for line in removed:
+                match = _PAGE_NUMBER.fullmatch(line.strip())
+                if match:
+                    printed = match.group(1)
+                    break
+        cleaned.append(
+            ExtractedPage(
+                number=page.number, text="\n".join(lines), label=page.label, printed=printed
+            )
+        )
     return cleaned
 
 
 def prepare_pages(pages: list[ExtractedPage]) -> list[ExtractedPage]:
     normalised = [
-        ExtractedPage(number=p.number, text=_normalise(p.text), label=p.label) for p in pages
+        ExtractedPage(
+            number=p.number, text=_normalise(p.text), label=p.label, printed=p.printed
+        )
+        for p in pages
     ]
     normalised = [p for p in normalised if p.text]
     return strip_running_headers(normalised)
@@ -135,3 +162,59 @@ def split_text(text: str, size: int = 1100, overlap: int = 160) -> list[str]:
         chunks.append(current.strip())
     # A pathological overlap can produce empty/duplicate tails; keep text only.
     return [chunk for chunk in chunks if chunk]
+
+
+def with_section(section: str, text: str) -> str:
+    """Chunk text prefixed with its heading breadcrumb, for search indexes."""
+    return f"{section}\n{text}" if section else text
+
+
+def _section_name(stack: list[str]) -> str:
+    name = " > ".join(stack)
+    return name if len(name) <= MAX_SECTION_CHARS else "…" + name[-(MAX_SECTION_CHARS - 1) :]
+
+
+def chunk_pages(
+    pages: list[ExtractedPage], size: int = 1100, overlap: int = 160
+) -> list[Chunk]:
+    """Split pages into chunks that never cross a heading.
+
+    Headings arrive as Markdown lines (``## Charge Reactions``). Each chunk is
+    tagged with the heading breadcrumb in force, which carries across pages.
+    """
+    chunks: list[Chunk] = []
+    stack: list[str] = []
+    for page in pages:
+        if page.label and page.label.strip():
+            stack = [page.label.strip()]
+        segments: list[tuple[str, list[str]]] = [(_section_name(stack), [])]
+        has_body = False
+        previous_level = 0
+        for line in page.text.split("\n"):
+            match = _HEADING.match(line.strip())
+            if not match:
+                segments[-1][1].append(line)
+                if line.strip():
+                    has_body = True
+                previous_level = 0
+                continue
+            level = len(match.group(1))
+            title = match.group(2).strip()
+            if previous_level == level and stack:
+                # A long heading wrapped onto the next line.
+                stack[-1] = f"{stack[-1]} {title}"
+            else:
+                stack = stack[: level - 1] + [title]
+            previous_level = level
+            if has_body:
+                segments.append((_section_name(stack), [title]))
+                has_body = False
+            else:
+                # Consecutive headings (chapter, then section) share one segment.
+                segments[-1] = (_section_name(stack), [*segments[-1][1], title])
+
+        for section, lines in segments:
+            text = "\n".join(lines).strip()
+            for piece in split_text(text, size, overlap):
+                chunks.append(Chunk(page.number, page.printed, section, piece))
+    return chunks

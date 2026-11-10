@@ -54,6 +54,7 @@ def _answer_results(
     filters: SearchFilters,
     limit: int,
     embedding: tuple[Provider, str] | None,
+    history: list[dict] | None = None,
 ) -> tuple[list[dict], str, str | None, list[str]]:
     """Retrieve for the question and a few model-written keyword variants.
 
@@ -63,7 +64,7 @@ def _answer_results(
     results, mode_used, note = search(
         conn, question, mode=mode, filters=filters, limit=limit, embedding=embedding
     )
-    queries = rewrite_queries(provider, model, question)
+    queries = rewrite_queries(provider, model, question, history)
     if not queries:
         return results, mode_used, note, []
 
@@ -256,6 +257,7 @@ def ask(payload: AskRequest):
                 filters,
                 payload.top_k or int(get_setting(conn, "rag_top_k", "10") or 10),
                 embedding,
+                payload.history,
             )
         except ProviderError as exc:
             raise HTTPException(exc.status_code, exc.message) from exc

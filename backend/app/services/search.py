@@ -171,6 +171,9 @@ def _row_to_result(row: sqlite3.Row, snippet: str, score: float, roles: dict) ->
         "score": score,
         "page_start": row["page_start"],
         "page_end": row["page_end"],
+        "page_label": row["page_label"] or "",
+        "section": row["section"] or "",
+        "ordinal": row["ordinal"],
         "source_type": "rules",
         "url": None,
         "document": {
@@ -206,7 +209,8 @@ def search_keyword(
     for expression in (match, match.replace(" AND ", " OR ")):
         sql = f"""
             SELECT c.id, c.text, c.page_start, c.page_end, c.document_id, c.game_id,
-                   c.role, d.title AS document_title, g.title AS game_title,
+                   c.role, c.section, c.page_label, c.ordinal,
+                   d.title AS document_title, g.title AS game_title,
                    g.game_type,
                    snippet(chunks_fts, 0, '{HIGHLIGHT_OPEN}', '{HIGHLIGHT_CLOSE}',
                            ' … ', 48) AS snip,
@@ -250,7 +254,8 @@ def search_semantic(
     clauses, params = filters.conditions("c")
     sql = f"""
         SELECT c.id, c.text, c.page_start, c.page_end, c.document_id, c.game_id,
-               c.role, d.title AS document_title, g.title AS game_title,
+               c.role, c.section, c.page_label, c.ordinal,
+               d.title AS document_title, g.title AS game_title,
                g.game_type, e.vector, e.dim
         FROM embeddings e
         JOIN chunks c ON c.id = e.chunk_id

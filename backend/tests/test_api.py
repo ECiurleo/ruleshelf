@@ -1028,8 +1028,10 @@ def test_answer_prompt_reasons_about_step_order():
         messages, _used = build_messages(conn, "Can this happen during setup?", [])
 
     prompt = messages[-1]["content"]
-    assert "Answer in this order." in prompt
+    assert "Then answer in this order." in prompt
     assert "Order:" in prompt
+    assert "Resolution:" in prompt
+    assert "verbatim quote" in prompt
     assert "Unclear or Not stated" in prompt
     assert "for each part" in prompt
     assert "Separate baseline from exception" in prompt
@@ -1057,6 +1059,117 @@ def test_system_prompt_removes_legacy_lead_with_answer(client):
     assert "Put the direct answer" not in cleaned
     assert "Keep this." in cleaned
     assert "takes precedence over any instruction to lead with the answer" in cleaned
+
+
+def test_stock_prompt_from_older_installs_is_upgraded():
+    from app.defaults import DEFAULT_SYSTEM_PROMPT
+    from app.services.rag import _PREVIOUS_DEFAULT_PROMPT, system_prompt
+
+    with db() as conn:
+        previous = get_setting(conn, "system_prompt")
+        set_setting(conn, "system_prompt", _PREVIOUS_DEFAULT_PROMPT)
+        try:
+            assert system_prompt(conn) == DEFAULT_SYSTEM_PROMPT
+        finally:
+            set_setting(conn, "system_prompt", previous or DEFAULT_SYSTEM_PROMPT)
+
+
+def test_rewrite_queries_sends_earlier_questions():
+    from app.services.rag import rewrite_queries
+
+    seen: list[str] = []
+
+    class RewriteProvider(Provider):
+        def chat(self, messages, model, temperature=0.2, max_tokens=2048):
+            seen.append(messages[-1]["content"])
+            yield "mounted charge"
+
+    provider = RewriteProvider(ProviderConfig(id="fake", name="Fake", kind="fake", base_url=""))
+    history = [
+        {"role": "user", "content": "How far can a knight charge?"},
+        {"role": "assistant", "content": "Twice its Movement [1]."},
+    ]
+    assert rewrite_queries(provider, "m", "And when mounted?", history) == ["mounted charge"]
+    assert "How far can a knight charge?" in seen[0]
+    assert "Question: And when mounted?" in seen[0]
+
+
+def make_heading_pdf() -> bytes:
+    import pymupdf
+
+    doc = pymupdf.open()
+    try:
+        for chapter in ("Combat", "Magic"):
+            page = doc.new_page(width=420, height=600)
+            page.insert_text((40, 60), chapter, fontsize=22)
+            page.insert_text((40, 100), "Charge Reactions", fontsize=15)
+            for row in range(8):
+                page.insert_text(
+                    (40, 130 + row * 16),
+                    f"The defender may hold, stand and shoot, or flee {row}",
+                    fontsize=10,
+                )
+        return doc.tobytes()
+    finally:
+        doc.close()
+
+
+def test_pdf_headings_become_chunk_sections(client, game):
+    document = upload_document(
+        client,
+        game["id"],
+        content=make_heading_pdf(),
+        filename="sections.pdf",
+        content_type="application/pdf",
+    )
+    assert wait_until_ready(client, document["id"])["status"] == "ready"
+    with db() as conn:
+        sections = [
+            row["section"]
+            for row in conn.execute(
+                "SELECT section FROM chunks WHERE document_id = ? ORDER BY ordinal",
+                (document["id"],),
+            )
+        ]
+    assert sections == ["Combat > Charge Reactions", "Magic > Charge Reactions"]
+
+    hits = client.get(
+        "/api/search", params={"q": "Magic", "mode": "keyword", "game_id": game["id"]}
+    ).json()
+    assert hits["count"] >= 1
+    assert hits["results"][0]["page_start"] == 2
+
+
+def test_answer_context_expands_neighbours_and_labels_sections(client, game):
+    from app.services.rag import build_messages, references_markdown
+    from app.services.search import SearchFilters, search
+
+    pages = "## Charge Reactions\n" + " ".join(
+        f"Reaction rule sentence {index} explains holding steady." for index in range(60)
+    )
+    document = upload_document(client, game["id"], content=pages.encode())
+    assert wait_until_ready(client, document["id"])["status"] == "ready"
+    with db() as conn:
+        conn.execute(
+            "UPDATE chunks SET page_label = '42' WHERE document_id = ?", (document["id"],)
+        )
+        total = conn.execute(
+            "SELECT COUNT(*) FROM chunks WHERE document_id = ?", (document["id"],)
+        ).fetchone()[0]
+        assert total >= 3
+        results, _, _ = search(
+            conn, "sentence 30", mode="keyword", filters=SearchFilters(game_id=game["id"])
+        )
+        messages, used = build_messages(conn, "What happens?", results[:1])
+
+    assert used[0]["section"] == "Charge Reactions"
+    assert len(used[0]["text"]) > len(results[0]["text"])
+    assert "sentence 30 " in used[0]["text"]
+    prompt = messages[-1]["content"]
+    assert "p. 42 — section: Charge Reactions" in prompt
+    references = references_markdown(used)
+    assert "p. 42" in references
+    assert "Charge Reactions" in references
 
 
 def test_official_prompt_ignores_forum_results():

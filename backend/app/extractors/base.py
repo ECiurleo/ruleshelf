@@ -22,6 +22,18 @@ class ExtractedPage:
     number: int | None
     text: str
     label: str = ""
+    # The page number printed in the book, when it differs from the PDF index.
+    printed: str = ""
 
 
 Extractor = Callable[[str], list[ExtractedPage]]
+
+
+def mark_html_headings(soup) -> None:
+    """Turn <h1>-<h4> into Markdown heading lines so chunking can track sections."""
+    for tag in soup.find_all(["h1", "h2", "h3", "h4"]):
+        title = " ".join(tag.get_text(" ").split())
+        if title:
+            tag.replace_with(f"\n{'#' * int(tag.name[1])} {title}\n")
+        else:
+            tag.decompose()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.extractors.base import ExtractedPage, ExtractionError
+from app.extractors.base import ExtractedPage, ExtractionError, mark_html_headings
 from app.extractors.registration import register_extractor
 
 
@@ -38,6 +38,7 @@ def extract_epub(path: str) -> list[ExtractedPage]:
         soup = BeautifulSoup(html, "html.parser")
         for tag in soup(["script", "style", "nav"]):
             tag.decompose()
+        mark_html_headings(soup)
         text = soup.get_text("\n")
         text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
         if not text.strip():

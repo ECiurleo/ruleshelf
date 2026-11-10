@@ -19,7 +19,7 @@ from app.defaults import BUILTIN_PROVIDERS, DEFAULT_SYSTEM_PROMPT, GAME_TYPES
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS games (
@@ -81,7 +81,9 @@ CREATE TABLE IF NOT EXISTS chunks (
     page_start  INTEGER,
     page_end    INTEGER,
     ordinal     INTEGER NOT NULL,
-    text        TEXT NOT NULL
+    text        TEXT NOT NULL,
+    section     TEXT NOT NULL DEFAULT '',
+    page_label  TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_game ON chunks(game_id);
@@ -277,6 +279,17 @@ def init_db() -> None:
                     "ALTER TABLE documents ADD COLUMN ocr_requested INTEGER NOT NULL DEFAULT 0"
                 )
             version = 6
+
+        if version < 7:
+            log.info("Migrating database to schema v7 (chunk sections and page labels)")
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(chunks)")}
+            if "section" not in columns:
+                conn.execute("ALTER TABLE chunks ADD COLUMN section TEXT NOT NULL DEFAULT ''")
+            if "page_label" not in columns:
+                conn.execute(
+                    "ALTER TABLE chunks ADD COLUMN page_label TEXT NOT NULL DEFAULT ''"
+                )
+            version = 7
 
         conn.execute(f"PRAGMA user_version = {version}")
         _seed(conn)

@@ -11,6 +11,7 @@ import numpy as np
 from app.db import get_setting
 from app.providers import Provider, ProviderConfig, build_provider
 from app.providers.base import ProviderError
+from app.services.chunking import with_section
 
 log = logging.getLogger(__name__)
 
@@ -116,7 +117,7 @@ def pending_chunks(
     conn: sqlite3.Connection, model: str, game_id: str | None = None, document_id: str | None = None
 ) -> list[tuple[int, str]]:
     sql = """
-        SELECT c.id, c.text
+        SELECT c.id, c.text, c.section
         FROM chunks c
         LEFT JOIN embeddings e ON e.chunk_id = c.id AND e.model = ?
         WHERE e.chunk_id IS NULL
@@ -129,7 +130,10 @@ def pending_chunks(
         sql += " AND c.document_id = ?"
         params.append(document_id)
     sql += " ORDER BY c.id"
-    return [(row["id"], row["text"]) for row in conn.execute(sql, params)]
+    return [
+        (row["id"], with_section(row["section"], row["text"]))
+        for row in conn.execute(sql, params)
+    ]
 
 
 def embedded_count(conn: sqlite3.Connection, model: str) -> int:

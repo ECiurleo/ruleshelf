@@ -12,7 +12,7 @@ from app.config import CHUNK_OVERLAP, CHUNK_SIZE, FILES_DIR
 from app.db import db, get_setting, utcnow
 from app.extractors import ExtractionError, extract_file, is_indexed
 from app.providers.base import ProviderError
-from app.services.chunking import prepare_pages, split_text
+from app.services.chunking import chunk_pages, prepare_pages, with_section
 from app.services.ocr import DEFAULT_LANGUAGE, ocr_available, ocr_file
 from app.services.thumbnails import delete_thumbnail, ensure_thumbnail
 
@@ -171,22 +171,20 @@ def ingest_document(document_id: str) -> None:
                 "use Run OCR to recognise it."
             )
 
-        rows: list[tuple] = []
-        ordinal = 0
-        for page in pages:
-            for chunk in split_text(page.text, CHUNK_SIZE, CHUNK_OVERLAP):
-                rows.append(
-                    (
-                        document_id,
-                        doc["game_id"],
-                        doc["role"],
-                        page.number,
-                        page.number,
-                        ordinal,
-                        chunk,
-                    )
-                )
-                ordinal += 1
+        rows: list[tuple] = [
+            (
+                document_id,
+                doc["game_id"],
+                doc["role"],
+                chunk.page,
+                chunk.page,
+                ordinal,
+                chunk.text,
+                chunk.section,
+                chunk.printed,
+            )
+            for ordinal, chunk in enumerate(chunk_pages(pages, CHUNK_SIZE, CHUNK_OVERLAP))
+        ]
         if not rows:
             raise ExtractionError("No text could be extracted from this file.")
 
@@ -201,14 +199,15 @@ def ingest_document(document_id: str) -> None:
                 cursor = conn.execute(
                     """
                     INSERT INTO chunks
-                        (document_id, game_id, role, page_start, page_end, ordinal, text)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (document_id, game_id, role, page_start, page_end, ordinal, text,
+                         section, page_label)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     row,
                 )
                 conn.execute(
                     "INSERT INTO chunks_fts (rowid, text) VALUES (?, ?)",
-                    (cursor.lastrowid, row[-1]),
+                    (cursor.lastrowid, with_section(row[7], row[6])),
                 )
             conn.execute(
                 """

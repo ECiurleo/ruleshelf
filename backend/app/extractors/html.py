@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.extractors.base import ExtractedPage, ExtractionError
+from app.extractors.base import ExtractedPage, ExtractionError, mark_html_headings
 from app.extractors.registration import register_extractor
 
 
@@ -22,6 +22,7 @@ def extract_html(path: str) -> list[ExtractedPage]:
 
     for tag in soup(["script", "style", "nav", "footer"]):
         tag.decompose()
+    mark_html_headings(soup)
     text = "\n".join(line.strip() for line in soup.get_text("\n").splitlines() if line.strip())
     if not text:
         raise ExtractionError("This HTML file contains no readable text.")

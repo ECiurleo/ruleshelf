@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.extractors import ExtractedPage
-from app.services.chunking import prepare_pages, split_text
+from app.services.chunking import chunk_pages, prepare_pages, split_text, with_section
 from app.services.search import build_match_query
 
 
@@ -54,3 +54,47 @@ def test_build_match_query_drops_stopwords_and_keeps_phrases():
 
 def test_build_match_query_empty():
     assert build_match_query("   ") == ""
+
+
+def test_chunk_pages_tracks_sections_across_pages():
+    pages = [
+        ExtractedPage(
+            number=1,
+            text="# Combat\n## Charge\nA charge moves double.\n## Charge\n## Reactions\n"
+            "The defender may hold.",
+        ),
+        ExtractedPage(number=2, text="Fleeing units move away."),
+    ]
+    chunks = chunk_pages(pages, size=400, overlap=40)
+    assert [(c.page, c.section) for c in chunks] == [
+        (1, "Combat > Charge"),
+        (1, "Combat > Charge Reactions"),
+        (2, "Combat > Charge Reactions"),
+    ]
+    assert chunks[0].text.startswith("Combat\nCharge\nA charge")
+    assert with_section(chunks[2].section, chunks[2].text).startswith("Combat > Charge")
+
+
+def test_chunk_pages_resets_section_for_labelled_units():
+    pages = [
+        ExtractedPage(number=1, text="Intro text.", label="Chapter One"),
+        ExtractedPage(number=2, text="## Detail\nMore text.", label="Chapter Two"),
+    ]
+    sections = [chunk.section for chunk in chunk_pages(pages)]
+    assert sections == ["Chapter One", "Chapter Two > Detail"]
+
+
+def test_header_stripping_keeps_printed_page_number():
+    pages = [
+        ExtractedPage(
+            number=i,
+            text=(
+                f"Rule line one {chr(96 + i)}.\nRule line two {chr(96 + i)}.\n"
+                f"Rule line three {chr(96 + i)}.\nRule line four {chr(96 + i)}.\n{i + 10}"
+            ),
+        )
+        for i in range(1, 7)
+    ]
+    cleaned = prepare_pages(pages)
+    assert cleaned[0].printed == "11"
+    assert cleaned[0].text.endswith("Rule line four a.")
