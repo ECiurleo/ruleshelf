@@ -9,10 +9,11 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 from app.config import CHUNK_OVERLAP, CHUNK_SIZE, FILES_DIR
-from app.db import db, utcnow
+from app.db import db, get_setting, utcnow
 from app.extractors import ExtractionError, extract_file, is_indexed
 from app.providers.base import ProviderError
 from app.services.chunking import prepare_pages, split_text
+from app.services.ocr import DEFAULT_LANGUAGE, ocr_available, ocr_file
 from app.services.thumbnails import delete_thumbnail, ensure_thumbnail
 
 log = logging.getLogger(__name__)
@@ -71,12 +72,16 @@ def ingest_document(document_id: str) -> None:
         doc = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
         if not doc:
             return
-        if not is_indexed(doc["original_filename"]):
+        indexed = is_indexed(doc["original_filename"])
+        auto_ocr = get_setting(conn, "auto_ocr", "1") != "0"
+        wants_ocr = bool(doc["ocr_requested"])
+        if not indexed and not wants_ocr and not auto_ocr:
             conn.execute(
                 "UPDATE documents SET status = 'unindexed', error = NULL WHERE id = ?",
                 (document_id,),
             )
             return
+        language = get_setting(conn, "ocr_language", DEFAULT_LANGUAGE) or DEFAULT_LANGUAGE
         conn.execute(
             "UPDATE documents SET status = 'processing', error = NULL WHERE id = ?",
             (document_id,),
@@ -86,9 +91,40 @@ def ingest_document(document_id: str) -> None:
     try:
         if not path.exists():
             raise ExtractionError("Stored file is missing from disk.")
-        pages = prepare_pages(extract_file(path, doc["original_filename"]))
+
+        pages = []
+        if indexed:
+            pages = prepare_pages(extract_file(path, doc["original_filename"]))
+
+        should_ocr = ocr_available() and (wants_ocr or (not pages and auto_ocr))
+        if should_ocr:
+            with db() as conn:
+                conn.execute(
+                    "UPDATE documents SET status = 'ocr', error = NULL WHERE id = ?",
+                    (document_id,),
+                )
+            log.info("Running OCR on %s (%s)", doc["original_filename"], language)
+            pages = prepare_pages(ocr_file(path, doc["original_filename"], language))
+
         if not pages:
-            raise ExtractionError("No text could be extracted from this file.")
+            if not indexed:
+                # A stored-only image with no recognisable text stays unindexed.
+                with db() as conn:
+                    conn.execute(
+                        "UPDATE documents SET status = 'unindexed', ocr_requested = 0, "
+                        "error = NULL WHERE id = ?",
+                        (document_id,),
+                    )
+                return
+            if not ocr_available():
+                raise ExtractionError(
+                    "No text could be extracted, and OCR is not available in this build. "
+                    "Install Tesseract or upload an OCR'd copy."
+                )
+            raise ExtractionError(
+                "No text could be extracted, even with OCR. Check the scan quality and "
+                "the OCR language, or upload a searchable copy."
+            )
 
         rows: list[tuple] = []
         ordinal = 0
@@ -133,7 +169,7 @@ def ingest_document(document_id: str) -> None:
                 """
                 UPDATE documents
                 SET status = 'ready', error = NULL, page_count = ?, chunk_count = ?,
-                    indexed_at = ?
+                    indexed_at = ?, ocr_requested = 0
                 WHERE id = ?
                 """,
                 (len(pages), len(rows), utcnow(), document_id),

@@ -444,6 +444,10 @@ code {
   margin-top: 8px;
 }
 
+.topbar-theme {
+  margin-top: 8px;
+}
+
 .search-shell {
   flex: 1;
   min-width: 0;
@@ -1760,7 +1764,8 @@ code {
 }
 
 .status-chip.pending,
-.status-chip.processing {
+.status-chip.processing,
+.status-chip.ocr {
   color: var(--warn);
   background: color-mix(in srgb, var(--warn) 10%, transparent);
   border-color: color-mix(in srgb, var(--warn) 28%, transparent);
@@ -3423,7 +3428,6 @@ code {
   .topbar-theme {
     margin-top: 8px;
   }
-
   .user-menu {
     margin-top: 8px;
   }

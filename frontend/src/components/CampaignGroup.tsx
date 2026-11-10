@@ -16,6 +16,7 @@ export function CampaignGroup({
   onDelete,
   onOpenDoc,
   onReindexDoc,
+  onOcrDoc,
   onDeleteDoc,
   onEditDoc,
 }: {
@@ -31,6 +32,7 @@ export function CampaignGroup({
   onDelete?: (campaign: Campaign) => void;
   onOpenDoc: (doc: Document) => void;
   onReindexDoc: (doc: Document) => void;
+  onOcrDoc: (doc: Document) => void;
   onDeleteDoc: (doc: Document) => void;
   onEditDoc: (doc: Document) => void;
 }) {
@@ -67,6 +69,7 @@ export function CampaignGroup({
               canWrite={canWrite}
               onOpenDoc={onOpenDoc}
               onReindexDoc={onReindexDoc}
+              onOcrDoc={onOcrDoc}
               onDeleteDoc={onDeleteDoc}
               onEditDoc={onEditDoc}
               onAddFile={() => onUpload(campaign?.id ?? null, lead.id)}

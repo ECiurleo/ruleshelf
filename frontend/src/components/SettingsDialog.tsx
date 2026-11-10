@@ -251,6 +251,8 @@ function SearchTab({
   const [redditEnabled, setRedditEnabled] = useState(
     settings.reddit_enabled !== "0",
   );
+  const [autoOcr, setAutoOcr] = useState(bundle.info.auto_ocr);
+  const [ocrLanguage, setOcrLanguage] = useState(bundle.info.ocr_language ?? "eng");
   const [chatModels, setChatModels] = useState<ModelInfo[]>([]);
   const [embedModels, setEmbedModels] = useState<ModelInfo[]>([]);
   const [busy, setBusy] = useState(false);
@@ -303,6 +305,8 @@ function SearchTab({
         rag_temperature: Number(temperature) || 0,
         system_prompt: systemPrompt,
         reddit_enabled: redditEnabled,
+        auto_ocr: autoOcr,
+        ocr_language: ocrLanguage.trim() || "eng",
       });
       await onRefresh();
       notify("Settings saved.", "ok");
@@ -428,6 +432,43 @@ function SearchTab({
             onChange={(event) => setRedditEnabled(event.target.checked)}
           />
           Search Reddit as well as BoardGameGeek
+        </label>
+      </section>
+
+      <section className="settings-section">
+        <h3>Scanned documents (OCR)</h3>
+        <p className="fine-print">
+          Text recognition runs locally with Tesseract — nothing leaves the server.
+          {bundle.info.ocr_available
+            ? " Scanned PDFs and images are recognised on upload while this is on."
+            : " OCR is not available in this build."}
+        </p>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={autoOcr}
+            onChange={(event) => setAutoOcr(event.target.checked)}
+            disabled={!bundle.info.ocr_available}
+          />
+          OCR scanned documents automatically on upload
+        </label>
+        <label className="field">
+          <span>OCR languages</span>
+          <input
+            value={ocrLanguage}
+            onChange={(event) => setOcrLanguage(event.target.value)}
+            placeholder="eng"
+            list="settings-ocr-languages"
+            disabled={!bundle.info.ocr_available}
+          />
+          <datalist id="settings-ocr-languages">
+            {bundle.info.ocr_languages.map((language) => (
+              <option key={language} value={language} />
+            ))}
+          </datalist>
+          <small className="fine-print">
+            Tesseract language codes. Join several with +, for example eng+deu.
+          </small>
         </label>
       </section>
 

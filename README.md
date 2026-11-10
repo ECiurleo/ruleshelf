@@ -16,8 +16,9 @@ docker compose up -d      # then open http://localhost:8080
   supplements/expansions (bestiaries, army books) and campaigns (separate from the rules).
 - **Uploads stay yours.** PDFs, EPUB, DOCX, Markdown, text and HTML are stored on disk and indexed
   into a local SQLite database. Maps and handouts can be uploaded as images: stored, previewed and
-  filed with their scenario, but deliberately not text-indexed until you OCR them. Nothing leaves
-  your machine unless you call an AI provider.
+  filed with their scenario. Scanned books and images can be OCR'd in-app (Tesseract runs
+  locally), either automatically on upload or per document. Nothing leaves your machine unless
+  you call an AI provider.
 - **Errata wins.** File official corrections under **Errata**: they are boosted above the core rules
   in every search mode, flagged with an "overrides core rules" badge, and the AI is instructed to
   treat them as superseding where the texts conflict. Every answer says when errata took precedence.
@@ -331,12 +332,27 @@ them into a group. Deleting a campaign keeps its documents and ungroups them.
 
 | Format | Notes |
 | --- | --- |
-| `.pdf` | Needs a text layer. Scanned books must be OCR'd first (`ocrmypdf in.pdf out.pdf`). |
+| `.pdf` | Text-layer PDFs index directly. Scans are OCR'd automatically when **auto-OCR** is on, or with **Run OCR** on the document. |
 | `.epub` | One citable unit per chapter. |
 | `.docx` | Grouped by heading. |
 | `.txt`, `.md`, `.rst` | A form feed (`\f`) starts a new page. |
 | `.html`, `.htm` | Readable text is extracted. |
-| `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff` | Stored and previewed but **not indexed** — no OCR runs on upload. Use these for maps, handouts and card scans; OCR them and upload the PDF if you want them searchable. |
+| `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.bmp`, `.tif`, `.tiff` | Stored, previewed and filed with their scenario. Recognised with OCR when **auto-OCR** is on (the default) or via **Run OCR**; otherwise they show a **Not indexed** badge. |
+
+### OCR
+
+Text recognition runs locally with Tesseract — no document leaves the machine. **Settings →
+Search & answers → Scanned documents** controls it:
+
+- **OCR scanned documents automatically on upload** — on by default. Scans with no text layer are
+  recognised during indexing instead of failing.
+- **OCR languages** — Tesseract language codes, default `eng`. Join several with `+`, e.g.
+  `eng+deu`; install the matching language pack in the image first.
+
+Every PDF or image also has a **Run OCR** action (the scan icon) that re-runs recognition and
+replaces the document's index. OCR progress shows as **Running OCR…**; long books can take a
+while but the rest of the app stays usable. If OCR finds nothing, the document is kept and marked
+**Not indexed** (images) or failed with an explanation (PDFs).
 
 Maximum upload size is 512 MB per file (`RULESHELF_MAX_UPLOAD_MB` to change it). Files over
 64 MB are sent in 8 MB chunks, so a reverse proxy's per-request body limit — Cloudflare caps
@@ -474,7 +490,9 @@ Other extension points: `services/chunking.py` (splitting), `services/search.py`
 - **“Ollama unreachable” from Docker.** Use `http://host.docker.internal:11434`, keep
   `extra_hosts: host.docker.internal:host-gateway` (already in the compose file), and make sure
   Ollama listens on all interfaces (`OLLAMA_HOST=0.0.0.0`).
-- **PDF indexed 0 pages.** It is a scan without a text layer; OCR it first.
+- **PDF indexed 0 pages.** It is a scan without a text layer. Auto-OCR is on by default; if it
+  was turned off, use **Run OCR** on the document. For unusual scripts, set the OCR language in
+  Settings first.
 - **413 on a large PDF.** Ruleshelf's own limit is 512 MB, and files over 64 MB upload in 8 MB
   chunks, so Cloudflare's 100 MB request cap is not the issue. If you still see 413, the proxy is
   rejecting even a chunk: set nginx `client_max_body_size 512m;` (and reload), or upload over the

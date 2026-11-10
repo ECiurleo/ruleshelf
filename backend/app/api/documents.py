@@ -29,6 +29,7 @@ from app.config import FILES_DIR, MAX_UPLOAD_BYTES, UPLOADS_DIR
 from app.db import db, get_setting, utcnow
 from app.extractors import is_indexed, resolve_extension
 from app.services.ingest import submit_ingest, unindex_document
+from app.services.ocr import is_image_file, ocr_available, ocr_supported
 from app.services.thumbnails import delete_thumbnail, ensure_thumbnail
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -230,7 +231,10 @@ def _doc_payload(conn, row, embedding_model: str) -> dict:
         "campaign_title": campaign_title,
         "scenario_id": row["scenario_id"],
         "file_count": file_count,
-        "indexed": is_indexed(row["original_filename"]),
+        "indexed": is_indexed(row["original_filename"]) or row["chunk_count"] > 0,
+        "is_image": is_image_file(row["original_filename"]),
+        "can_ocr": ocr_available() and ocr_supported(row["original_filename"]),
+        "ocr_requested": bool(row["ocr_requested"]),
         "sort_order": row["sort_order"],
         "original_filename": row["original_filename"],
         "content_type": row["content_type"],
@@ -477,6 +481,28 @@ def cancel_upload(upload_id: str):
     return {"deleted": True}
 
 
+@router.post("/{document_id}/ocr", dependencies=[Depends(require_admin)])
+def ocr_document(document_id: str):
+    """Queue OCR for one document, replacing its index with recognised text."""
+    with db() as conn:
+        row = conn.execute("SELECT * FROM documents WHERE id = ?", (document_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Document not found.")
+        if not ocr_supported(row["original_filename"]):
+            raise HTTPException(400, "This file type cannot be OCR'd.")
+        if not ocr_available():
+            raise HTTPException(
+                400, "OCR is not available in this build. Install Tesseract and restart."
+            )
+        conn.execute(
+            "UPDATE documents SET status = 'pending', error = NULL, ocr_requested = 1 "
+            "WHERE id = ?",
+            (document_id,),
+        )
+    submit_ingest(document_id)
+    return {"status": "pending"}
+
+
 @router.get("/{document_id}/thumbnail")
 def document_thumbnail(document_id: str):
     with db() as conn:
@@ -647,8 +673,7 @@ def reindex_document(document_id: str):
         if not is_indexed(row["original_filename"]):
             raise HTTPException(
                 400,
-                "This file type is stored for browsing only and is not indexed. "
-                "Run OCR on it and upload the resulting PDF or text to make it searchable.",
+                "This file type is stored for browsing. Use Run OCR to recognise text in it.",
             )
         conn.execute(
             "UPDATE documents SET status = 'pending', error = NULL WHERE id = ?", (document_id,)

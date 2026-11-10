@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import numpy as np
+import pytest
 
 from app.config import UPLOADS_DIR
 from app.db import db, get_setting, set_setting
+from app.extractors.base import ExtractedPage
 from app.providers.base import ModelInfo, Provider, ProviderConfig
+from app.services.ocr import ocr_available
 from app.services.search import SearchFilters, search_semantic
 from tests.conftest import make_text_document, upload_document, wait_until_ready
 
@@ -424,6 +427,8 @@ def make_png() -> bytes:
 
 
 def test_image_files_are_stored_but_not_indexed(client, game):
+    with db() as conn:
+        set_setting(conn, "auto_ocr", "0")
     campaign = client.post(
         f"/api/games/{game['id']}/campaigns", json={"title": "The Enemy Within"}
     ).json()
@@ -474,6 +479,8 @@ def test_image_files_are_stored_but_not_indexed(client, game):
     # Deleting the scenario takes the stored image with it.
     assert client.delete(f"/api/documents/{scenario['id']}").json()["files_deleted"] == 1
     assert client.get(f"/api/documents/{image['id']}").status_code == 404
+    with db() as conn:
+        set_setting(conn, "auto_ocr", "1")
 
 
 def test_chunked_upload_reassembles_the_file(client, game):
@@ -553,6 +560,155 @@ def test_chunked_upload_checks_offsets_and_size(client, game):
         client.put(f"/api/documents/uploads/{upload_id}?offset=0", content=b"x").status_code
         == 404
     )
+
+
+def make_blank_pdf() -> bytes:
+    """A one-page PDF with vector art but no text layer, like a scanned page."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=200, height=260)
+        page.draw_rect(page.rect, color=(0.1, 0.1, 0.1), fill=(0.9, 0.85, 0.7))
+        return doc.tobytes()
+    finally:
+        doc.close()
+
+
+def make_scanned_pdf(text: str = "KEMPERBAD DOCKS") -> bytes:
+    """A PDF whose only page is a raster image of text — a scan, not a text PDF."""
+    import pymupdf
+
+    source = pymupdf.open()
+    try:
+        page = source.new_page(width=420, height=180)
+        page.insert_text((30, 100), text, fontsize=30, fontname="hebo")
+        pixmap = page.get_pixmap(matrix=pymupdf.Matrix(2, 2))
+    finally:
+        source.close()
+
+    scanned = pymupdf.open()
+    try:
+        page = scanned.new_page(width=pixmap.width, height=pixmap.height)
+        page.insert_image(page.rect, stream=pixmap.tobytes("png"))
+        return scanned.tobytes()
+    finally:
+        scanned.close()
+
+
+@pytest.mark.skipif(not ocr_available(), reason="Tesseract is not installed")
+def test_real_ocr_reads_a_scanned_page(client, game):
+    document = upload_document(
+        client,
+        game["id"],
+        title="Real scan",
+        content=make_scanned_pdf(),
+        filename="real-scan.pdf",
+        content_type="application/pdf",
+    )
+    ready = wait_until_ready(client, document["id"], timeout=120)
+    assert ready["status"] == "ready", ready["error"]
+    assert ready["chunk_count"] >= 1
+    hits = client.get(
+        "/api/search",
+        params={"q": "KEMPERBAD", "mode": "keyword", "game_id": game["id"]},
+    ).json()
+    assert hits["count"] >= 1
+
+
+def test_ocr_settings_default_to_on(client):
+    info = client.get("/api/settings").json()["info"]
+    assert info["auto_ocr"] is True
+    assert info["ocr_language"] == "eng"
+
+
+def test_auto_ocr_indexes_a_scanned_pdf_and_manual_ocr_works(client, game, monkeypatch):
+    recognisable = [ExtractedPage(number=1, text="The Reik is wide and cold.")]
+
+    def fake_ocr(path, original_filename=None, language="eng"):
+        return recognisable
+
+    monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
+    monkeypatch.setattr("app.services.ingest.ocr_file", fake_ocr)
+    monkeypatch.setattr("app.api.documents.ocr_available", lambda: True)
+
+    scan = make_blank_pdf()
+    automatic = upload_document(
+        client,
+        game["id"],
+        title="Scanned chapter",
+        content=scan,
+        filename="scan.pdf",
+        content_type="application/pdf",
+    )
+    ready = wait_until_ready(client, automatic["id"])
+    assert ready["status"] == "ready"
+    assert ready["chunk_count"] >= 1
+    assert ready["can_ocr"] is True
+
+    # With automatic OCR off, the scan fails until OCR is requested.
+    with db() as conn:
+        set_setting(conn, "auto_ocr", "0")
+    try:
+        manual = upload_document(
+            client,
+            game["id"],
+            title="Another scan",
+            content=scan,
+            filename="scan2.pdf",
+            content_type="application/pdf",
+        )
+        failed = wait_until_ready(client, manual["id"])
+        assert failed["status"] == "error"
+        assert "No text could be extracted" in (failed["error"] or "")
+
+        assert client.post(f"/api/documents/{manual['id']}/ocr").status_code == 200
+        fixed = wait_until_ready(client, manual["id"])
+        assert fixed["status"] == "ready"
+        assert fixed["chunk_count"] >= 1
+    finally:
+        with db() as conn:
+            set_setting(conn, "auto_ocr", "1")
+
+
+def test_manual_ocr_turns_a_stored_image_into_a_searchable_document(client, game, monkeypatch):
+    monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
+    monkeypatch.setattr(
+        "app.services.ingest.ocr_file",
+        lambda path, original_filename=None, language="eng": [
+            ExtractedPage(number=1, text="Kemperbad docks and river wards.")
+        ],
+    )
+    monkeypatch.setattr("app.api.documents.ocr_available", lambda: True)
+
+    with db() as conn:
+        set_setting(conn, "auto_ocr", "0")
+    try:
+        image = upload_document(
+            client,
+            game["id"],
+            role="campaign",
+            title="River map",
+            content=make_png(),
+            filename="river-map.png",
+            content_type="image/png",
+        )
+        assert image["status"] == "unindexed"
+        assert image["indexed"] is False
+        assert image["can_ocr"] is True
+
+        assert client.post(f"/api/documents/{image['id']}/ocr").status_code == 200
+        ready = wait_until_ready(client, image["id"])
+        assert ready["status"] == "ready"
+        assert ready["indexed"] is True
+        assert ready["chunk_count"] >= 1
+    finally:
+        with db() as conn:
+            set_setting(conn, "auto_ocr", "1")
+
+    # Plain text is not an OCR candidate.
+    text = upload_document(client, game["id"], title="Plain text")
+    assert client.post(f"/api/documents/{text['id']}/ocr").status_code == 400
 
 
 def test_thumbnail_is_generated_and_removed(client, game):

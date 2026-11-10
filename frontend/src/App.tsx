@@ -484,8 +484,8 @@ export default function App() {
   };
 
   const openReaderForDocument = (doc: Document) => {
-    if (!doc.indexed) {
-      // Stored-only files (maps, handouts) have no text to page through.
+    if (doc.is_image) {
+      // Maps and handouts are viewed as images; OCR text is searchable separately.
       window.open(api.fileUrl(doc.id), "_blank", "noopener,noreferrer");
       return;
     }
@@ -550,6 +550,16 @@ export default function App() {
       await Promise.all([refreshDocuments(activeGameId), refreshCampaigns(activeGameId)]);
       await refreshLibrary();
       notify("Document deleted.", "ok");
+    } catch (err) {
+      notify((err as Error).message, "error");
+    }
+  };
+
+  const ocrDocument = async (doc: Document) => {
+    try {
+      await api.ocrDocument(doc.id);
+      await refreshDocuments(activeGameId);
+      notify("OCR started. This can take a while for long books.", "ok");
     } catch (err) {
       notify((err as Error).message, "error");
     }
@@ -677,6 +687,7 @@ export default function App() {
           onCampaignDelete={deleteCampaign}
           onOpenDoc={openReaderForDocument}
           onReindexDoc={reindexDocument}
+          onOcrDoc={ocrDocument}
           onDeleteDoc={deleteDocument}
           onEditDoc={(doc) => setEditingDoc(doc)}
         />
