@@ -87,6 +87,24 @@ export interface Document {
   indexed_at: string | null;
 }
 
+const DOCUMENT_STATUS_LABEL: Record<DocumentStatus, string> = {
+  pending: "Queued",
+  processing: "Indexing…",
+  ocr: "Running OCR…",
+  ready: "Ready",
+  error: "Failed",
+  unindexed: "Not indexed",
+};
+
+/** Status text, distinguishing a queued OCR from ordinary indexing. */
+export function documentStatusLabel(
+  doc: Pick<Document, "status" | "ocr_requested">,
+): string {
+  if (doc.status === "pending" && doc.ocr_requested) return "OCR queued";
+  if (doc.status === "processing" && doc.ocr_requested) return "Preparing OCR…";
+  return DOCUMENT_STATUS_LABEL[doc.status];
+}
+
 export interface SearchResult {
   chunk_id: number | string;
   snippet: string;

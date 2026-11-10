@@ -559,7 +559,7 @@ export default function App() {
     try {
       await api.ocrDocument(doc.id);
       await refreshDocuments(activeGameId);
-      notify("OCR started. This can take a while for long books.", "ok");
+      notify("OCR queued. Long books can take a while; progress is shown on the document.", "ok");
     } catch (err) {
       notify((err as Error).message, "error");
     }
