@@ -118,9 +118,19 @@ def _tesseract_image(image: str | Path, language: str, dpi: int) -> str:
     command = [binary, str(image), "stdout", "-l", language]
     if dpi:
         command += ["--dpi", str(dpi)]
+    # One Tesseract process = one core. Without this, OpenMP can spread a
+    # single page across several cores and break the effort levels.
+    environment = os.environ.copy()
+    environment.setdefault("OMP_THREAD_LIMIT", "1")
+    environment.setdefault("OMP_NUM_THREADS", "1")
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True, timeout=600, check=False
+            command,
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+            env=environment,
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise ExtractionError(f"OCR failed ({language}): {exc}") from exc
