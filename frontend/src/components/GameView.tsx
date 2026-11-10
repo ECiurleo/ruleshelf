@@ -27,6 +27,7 @@ export function GameView({
   onOpenDoc,
   onReindexDoc,
   onOcrDoc,
+  onOcrFailed,
   onDeleteDoc,
   onEditDoc,
 }: {
@@ -45,6 +46,7 @@ export function GameView({
   onOpenDoc: (doc: Document) => void;
   onReindexDoc: (doc: Document) => void;
   onOcrDoc: (doc: Document) => void;
+  onOcrFailed: () => void;
   onDeleteDoc: (doc: Document) => void;
   onEditDoc: (doc: Document) => void;
 }) {
@@ -86,6 +88,9 @@ export function GameView({
   const processing = documents.filter(
     (doc) =>
       doc.status === "pending" || doc.status === "processing" || doc.status === "ocr",
+  ).length;
+  const failedOcr = documents.filter(
+    (doc) => doc.status === "error" && doc.can_ocr,
   ).length;
   const ocrActive = documents.filter(
     (doc) =>
@@ -170,6 +175,15 @@ export function GameView({
               <Icon name="list" size={16} />
             </button>
           </div>
+          {canWrite && failedOcr > 0 && (
+            <button
+              className="button ghost small"
+              onClick={onOcrFailed}
+              title="Queue OCR for every failed, OCR-capable document in this game"
+            >
+              <Icon name="scan" size={15} /> OCR all failed ({failedOcr})
+            </button>
+          )}
           {canWrite && (
             <>
               <button className="button primary" onClick={() => onUpload("core")}>

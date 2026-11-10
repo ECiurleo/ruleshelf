@@ -565,6 +565,21 @@ export default function App() {
     }
   };
 
+  const ocrFailedDocuments = async () => {
+    try {
+      const result = await api.ocrFailedDocuments(activeGameId);
+      await refreshDocuments(activeGameId);
+      notify(
+        result.queued
+          ? `${result.queued} failed document${result.queued === 1 ? "" : "s"} queued for OCR.`
+          : "No failed OCR-capable documents to queue.",
+        "ok",
+      );
+    } catch (err) {
+      notify((err as Error).message, "error");
+    }
+  };
+
   const reindexDocument = async (doc: Document) => {
     try {
       await api.reindexDocument(doc.id);
@@ -688,6 +703,7 @@ export default function App() {
           onOpenDoc={openReaderForDocument}
           onReindexDoc={reindexDocument}
           onOcrDoc={ocrDocument}
+          onOcrFailed={ocrFailedDocuments}
           onDeleteDoc={deleteDocument}
           onEditDoc={(doc) => setEditingDoc(doc)}
         />
