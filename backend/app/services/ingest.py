@@ -82,6 +82,7 @@ def ingest_document(document_id: str) -> None:
             )
             return
         language = get_setting(conn, "ocr_language", DEFAULT_LANGUAGE) or DEFAULT_LANGUAGE
+        effort = get_setting(conn, "ocr_cpu", "medium") or "medium"
         conn.execute(
             "UPDATE documents SET status = 'processing', error = NULL WHERE id = ?",
             (document_id,),
@@ -103,8 +104,15 @@ def ingest_document(document_id: str) -> None:
                     "UPDATE documents SET status = 'ocr', error = NULL WHERE id = ?",
                     (document_id,),
                 )
-            log.info("Running OCR on %s (%s)", doc["original_filename"], language)
-            pages = prepare_pages(ocr_file(path, doc["original_filename"], language))
+            log.info(
+                "Running OCR on %s (%s, %s CPU)",
+                doc["original_filename"],
+                language,
+                effort,
+            )
+            pages = prepare_pages(
+                ocr_file(path, doc["original_filename"], language, effort)
+            )
 
         if not pages:
             if not indexed:

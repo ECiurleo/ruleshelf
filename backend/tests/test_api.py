@@ -620,12 +620,42 @@ def test_ocr_settings_default_to_on(client):
     info = client.get("/api/settings").json()["info"]
     assert info["auto_ocr"] is True
     assert info["ocr_language"] == "eng"
+    assert info["ocr_cpu"] == "medium"
+
+
+def test_ocr_cpu_setting_is_passed_to_the_engine(client, game, monkeypatch):
+    captured: dict[str, str] = {}
+
+    def fake_ocr(path, original_filename=None, language="eng", effort="medium"):
+        captured["effort"] = effort
+        return [ExtractedPage(number=1, text="Recognised at the selected effort.")]
+
+    monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
+    monkeypatch.setattr("app.services.ingest.ocr_file", fake_ocr)
+
+    with db() as conn:
+        set_setting(conn, "ocr_cpu", "low")
+    try:
+        document = upload_document(
+            client,
+            game["id"],
+            title="Low CPU scan",
+            content=make_blank_pdf(),
+            filename="low-cpu.pdf",
+            content_type="application/pdf",
+        )
+        ready = wait_until_ready(client, document["id"])
+        assert ready["status"] == "ready"
+        assert captured.get("effort") == "low"
+    finally:
+        with db() as conn:
+            set_setting(conn, "ocr_cpu", "medium")
 
 
 def test_auto_ocr_indexes_a_scanned_pdf_and_manual_ocr_works(client, game, monkeypatch):
     recognisable = [ExtractedPage(number=1, text="The Reik is wide and cold.")]
 
-    def fake_ocr(path, original_filename=None, language="eng"):
+    def fake_ocr(path, original_filename=None, language="eng", effort="medium"):
         return recognisable
 
     monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
@@ -675,7 +705,7 @@ def test_manual_ocr_turns_a_stored_image_into_a_searchable_document(client, game
     monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
     monkeypatch.setattr(
         "app.services.ingest.ocr_file",
-        lambda path, original_filename=None, language="eng": [
+        lambda path, original_filename=None, language="eng", effort="medium": [
             ExtractedPage(number=1, text="Kemperbad docks and river wards.")
         ],
     )
@@ -715,7 +745,7 @@ def test_queue_all_failed_documents_for_ocr(client, game, monkeypatch):
     monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
     monkeypatch.setattr(
         "app.services.ingest.ocr_file",
-        lambda path, original_filename=None, language="eng": [
+        lambda path, original_filename=None, language="eng", effort="medium": [
             ExtractedPage(number=1, text="Recognised by the bulk OCR queue.")
         ],
     )

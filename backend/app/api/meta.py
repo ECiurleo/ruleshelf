@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
@@ -39,6 +40,7 @@ EDITABLE_SETTINGS = {
     "reddit_enabled",
     "auto_ocr",
     "ocr_language",
+    "ocr_cpu",
 }
 
 # Kept for older config snapshots that may still contain the removed fields.
@@ -90,6 +92,7 @@ class SettingsUpdate(BaseModel):
     reddit_enabled: bool | None = None
     auto_ocr: bool | None = None
     ocr_language: str | None = Field(default=None, max_length=64)
+    ocr_cpu: Literal["low", "medium", "high"] | None = None
 
     @field_validator("ocr_language")
     @classmethod
@@ -152,6 +155,7 @@ def _settings_payload(conn: sqlite3.Connection) -> dict:
             "reddit_enabled": stored.get("reddit_enabled", "1") != "0",
             "auto_ocr": stored.get("auto_ocr", "1") != "0",
             "ocr_language": stored.get("ocr_language", "eng") or "eng",
+            "ocr_cpu": stored.get("ocr_cpu", "medium") or "medium",
             "ocr_available": ocr_available(),
             "ocr_languages": ocr_languages(),
         },

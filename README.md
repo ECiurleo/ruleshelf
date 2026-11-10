@@ -348,6 +348,9 @@ Search & answers → Scanned documents** controls it:
   recognised during indexing instead of failing.
 - **OCR languages** — Tesseract language codes, default `eng`. Join several with `+`, e.g.
   `eng+deu`; install the matching language pack in the image first.
+- **OCR CPU usage** — `Low` runs 200 dpi with a pause between pages, `Medium` (default) runs
+  300 dpi one page at a time, and `High` runs 300 dpi with up to four pages in parallel. One
+  document is OCR'd at a time across the server, so a queue never saturates the CPU.
 
 Every PDF or image also has a **Run OCR** action (the scan icon) that re-runs recognition and
 replaces the document's index. OCR progress shows as **Running OCR…**; long books can take a
