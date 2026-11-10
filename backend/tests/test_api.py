@@ -9,6 +9,7 @@ from app.config import UPLOADS_DIR
 from app.db import db, get_setting, set_setting
 from app.extractors.base import ExtractedPage
 from app.providers.base import ModelInfo, Provider, ProviderConfig
+from app.services.ingest import recover_interrupted
 from app.services.ocr import ocr_available
 from app.services.search import SearchFilters, search_semantic
 from tests.conftest import make_text_document, upload_document, wait_until_ready
@@ -626,7 +627,7 @@ def test_ocr_settings_default_to_on(client):
 def test_ocr_cpu_setting_is_passed_to_the_engine(client, game, monkeypatch):
     captured: dict[str, str] = {}
 
-    def fake_ocr(path, original_filename=None, language="eng", effort="medium"):
+    def fake_ocr(path, original_filename=None, language="eng", effort="medium", on_start=None):
         captured["effort"] = effort
         return [ExtractedPage(number=1, text="Recognised at the selected effort.")]
 
@@ -655,7 +656,7 @@ def test_ocr_cpu_setting_is_passed_to_the_engine(client, game, monkeypatch):
 def test_auto_ocr_indexes_a_scanned_pdf_and_manual_ocr_works(client, game, monkeypatch):
     recognisable = [ExtractedPage(number=1, text="The Reik is wide and cold.")]
 
-    def fake_ocr(path, original_filename=None, language="eng", effort="medium"):
+    def fake_ocr(path, original_filename=None, language="eng", effort="medium", on_start=None):
         return recognisable
 
     monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
@@ -705,7 +706,7 @@ def test_manual_ocr_turns_a_stored_image_into_a_searchable_document(client, game
     monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
     monkeypatch.setattr(
         "app.services.ingest.ocr_file",
-        lambda path, original_filename=None, language="eng", effort="medium": [
+        lambda path, original_filename=None, language="eng", effort="medium", on_start=None: [
             ExtractedPage(number=1, text="Kemperbad docks and river wards.")
         ],
     )
@@ -745,7 +746,7 @@ def test_queue_all_failed_documents_for_ocr(client, game, monkeypatch):
     monkeypatch.setattr("app.services.ingest.ocr_available", lambda: True)
     monkeypatch.setattr(
         "app.services.ingest.ocr_file",
-        lambda path, original_filename=None, language="eng", effort="medium": [
+        lambda path, original_filename=None, language="eng", effort="medium", on_start=None: [
             ExtractedPage(number=1, text="Recognised by the bulk OCR queue.")
         ],
     )
@@ -783,6 +784,19 @@ def test_queue_all_failed_documents_for_ocr(client, game, monkeypatch):
     finally:
         with db() as conn:
             set_setting(conn, "auto_ocr", "1")
+
+
+def test_interrupted_documents_are_recovered_on_startup(client, game):
+    document = upload_document(client, game["id"], title="Interrupted")
+    assert wait_until_ready(client, document["id"])["status"] == "ready"
+    with db() as conn:
+        conn.execute(
+            "UPDATE documents SET status = 'ocr' WHERE id = ?", (document["id"],)
+        )
+    recover_interrupted()
+    recovered = client.get(f"/api/documents/{document['id']}").json()
+    assert recovered["status"] == "error"
+    assert "restart" in (recovered["error"] or "").lower()
 
 
 def test_thumbnail_is_generated_and_removed(client, game):
