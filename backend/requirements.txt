@@ -1,6 +1,6 @@
 fastapi>=0.162.2,<1
 uvicorn[standard]>=0.54.0,<1
-python-multipart>=0.0.33
+python-multipart>=0.0.34
 pymupdf>=2.1
 ebooklib>=0.21
 beautifulsoup4>=4.15.0
